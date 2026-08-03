@@ -173,7 +173,6 @@ public class KnifeSystem
                 ChatColors.Green,
                 CommandUtility.PublicChatTrigger
             ]
-                + $"\n{FormatRemaining()}"
         );
     }
 
@@ -407,25 +406,15 @@ public class KnifeSystem
             return;
         }
 
-        string countdownText = _localizer["knife.decision_countdown", FormatRemaining()];
-
-        // HudDestination.Alert shares CS2's native WARMUP HUD panel, so a
-        // repeating Alert here just flickers against it. Center is free —
-        // except for the captain, who already gets their own repeating
-        // Center prompt (SetupKnifeMessage) — so send it there instead, to
-        // everyone but the captain.
+        // Only the deciding captain needs to see this ticking — CCSPlayerController
+        // has its own per-player PrintToCenterAlert (unlike GameServer.Message,
+        // which only exposes a global broadcast for Alert). It also ticks
+        // smoothly every second, unlike Center text (which has a minimum hold
+        // time and visibly jumps/lags when refreshed this often).
         MatchManager? match = _matchService.GetCurrentMatch();
         CCSPlayerController? captain = match?.captainSystem?.GetTeamCaptain(_winningTeam.Value);
 
-        foreach (CCSPlayerController player in MatchUtility.Players())
-        {
-            if (captain != null && player.SteamID == captain.SteamID)
-            {
-                continue;
-            }
-
-            player.PrintToCenter(countdownText);
-        }
+        captain?.PrintToCenterAlert(_localizer["knife.decision_countdown", FormatRemaining()]);
     }
 
     public void Reset()

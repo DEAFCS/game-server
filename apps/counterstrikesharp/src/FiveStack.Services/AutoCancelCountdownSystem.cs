@@ -1,6 +1,7 @@
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
+using FiveStack.Enums;
 using FiveStack.Utilities;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
@@ -72,7 +73,16 @@ public class AutoCancelCountdownSystem
         // timeout once the knife round starts (Knife/Live/Overtime — "LIVE"
         // is considered to begin at the knife round) — only the pre-game
         // warmup deadline should show as a countdown to players.
-        if (_matchService.GetCurrentMatch()?.IsWarmup() != true)
+        //
+        // Deliberately checking GetCurrentMapStatus() directly here instead
+        // of match.IsWarmup(): that helper also returns true whenever CS2's
+        // own engine WarmupPeriod flag is set, which KnifeSystem turns back
+        // on (mp_warmup_start) during the post-knife stay/switch decision
+        // window to avoid freezing the game. That made this countdown
+        // wrongly reappear there too, showing the unrelated (much larger)
+        // live-match-timeout value under the "WARMUP" label.
+        eMapStatus? currentStatus = _matchService.GetCurrentMatch()?.GetCurrentMapStatus();
+        if (currentStatus != eMapStatus.Warmup && currentStatus != eMapStatus.Scheduled)
         {
             return;
         }
