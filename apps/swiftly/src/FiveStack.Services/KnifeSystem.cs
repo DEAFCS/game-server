@@ -20,8 +20,10 @@ public class KnifeSystem
     private readonly ILocalizer _localizer;
     private CancellationTokenSource? _knifeRoundTimer;
     private CancellationTokenSource? _knifeTimeoutTimer;
+    private CancellationTokenSource? _knifeCountdownTimer;
 
     private Team? _winningTeam;
+    private DateTime? _decisionDeadline;
 
     // Captain has this long to pick stay/switch before it auto-resolves to
     // "stay" (the standard CS convention for an undecided knife round).
@@ -61,7 +63,7 @@ public class KnifeSystem
     {
         MatchManager? match = _matchService.GetCurrentMatch();
 
-        // Warmup only, not paused — captains have up to
+        // Warmup only, not frozen — captains have up to
         // KNIFE_DECISION_TIMEOUT_SECONDS to pick stay/switch, and freezing the
         // game solid for that whole window felt worse than letting players
         // move around in warmup while they wait.
@@ -69,15 +71,19 @@ public class KnifeSystem
         // Order matters here: mp_warmup_start latches in whatever
         // mp_warmuptime is set to at that exact moment, so the cfg exec (which
         // resets mp_warmuptime to the normal, much longer pre-knife warmup
-        // duration) and our override to the 60s decision window both have to
-        // run *before* mp_warmup_start — not after — or CS2's own native
-        // WARMUP HUD box shows leftover time from the wrong duration.
+        // duration) and our overrides both have to run *before*
+        // mp_warmup_start — not after — or CS2's own native WARMUP HUD box
+        // shows the wrong duration. The match cfg also sets
+        // mp_warmup_pausetimer 1 (so the real pre-match warmup never runs out
+        // on its own) — that has to be turned back off here too, or the
+        // countdown just sits frozen instead of ticking down.
         List<string> commands = [];
         if (match != null)
         {
             commands.Add($"exec 5stack.{match.GetMatchData()?.options.type.ToLower()}.cfg");
         }
         commands.Add($"mp_warmuptime {(int)KNIFE_DECISION_TIMEOUT_SECONDS}");
+        commands.Add("mp_warmup_pausetimer 0");
         commands.Add("mp_warmup_start");
 
         _gameServer.SendCommands([.. commands]);
@@ -97,6 +103,14 @@ public class KnifeSystem
             KNIFE_DECISION_TIMEOUT_SECONDS,
             HandleDecisionTimeout
         );
+
+        // CS2's own native WARMUP HUD box can't be trusted to show the right
+        // time here (it keeps leftover time from the original, much longer
+        // pre-knife warmup no matter what we set mp_warmuptime to) — so this
+        // is our own, fully-controlled live countdown instead.
+        _decisionDeadline = DateTime.UtcNow.AddSeconds(KNIFE_DECISION_TIMEOUT_SECONDS);
+        _knifeCountdownTimer = TimerUtility.Repeat(1, UpdateDecisionCountdown);
+        UpdateDecisionCountdown();
 
         SetupKnifeMessage();
 
@@ -375,12 +389,34 @@ public class KnifeSystem
         match.UpdateMapStatus(eMapStatus.Live);
     }
 
+    private void UpdateDecisionCountdown()
+    {
+        if (_decisionDeadline == null)
+        {
+            return;
+        }
+
+        int remainingSeconds = (int)
+            Math.Max(0, Math.Ceiling((_decisionDeadline.Value - DateTime.UtcNow).TotalSeconds));
+
+        int minutes = remainingSeconds / 60;
+        int seconds = remainingSeconds % 60;
+
+        _gameServer.Message(
+            MessageType.Alert,
+            _localizer["knife.decision_countdown", $"{minutes}:{seconds:D2}"]
+        );
+    }
+
     public void Reset()
     {
         TimerUtility.Kill(_knifeRoundTimer);
         TimerUtility.Kill(_knifeTimeoutTimer);
+        TimerUtility.Kill(_knifeCountdownTimer);
         _knifeRoundTimer = null;
         _knifeTimeoutTimer = null;
+        _knifeCountdownTimer = null;
         _winningTeam = null;
+        _decisionDeadline = null;
     }
 }

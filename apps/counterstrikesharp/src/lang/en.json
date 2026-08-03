@@ -41,6 +41,7 @@
   "knife.captain_picked_stay": "captain picked to {0}stay {1}sides",
   "knife.captain_picked_swap": "captain picked to {0}swap {1}sides",
   "knife.timeout_stay": "No side selected in time — {0}staying {1}sides",
+  "knife.decision_countdown": "Choose Stay/Switch — {0}",
   "knife.skipping": "Skipping Knife.",
 
   "auto_cancel.warmup_countdown": "WARMUP\n{0}",
