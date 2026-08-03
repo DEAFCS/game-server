@@ -39,7 +39,11 @@
   "knife.not_captain": " {0}You are not the captain!",
   "knife.captain_picked_stay": "captain picked to {0}stay {1}sides",
   "knife.captain_picked_swap": "captain picked to {0}swap {1}sides",
+  "knife.timeout_stay": "No side selected in time — {0}staying {1}sides",
   "knife.skipping": "Skipping Knife.",
+
+  "auto_cancel.time_left": "{0}Match auto-cancels in {1} if players don't connect/ready up",
+  "auto_cancel.canceled": "{0}Match canceled — server shutting down",
 
   "timeout.cannot_pause_not_live": " {0}Cannot pause while match is not live",
   "timeout.admin_paused": "Admin Paused the Match",

@@ -86,7 +86,8 @@ public partial class FiveStackPlugin : BasePlugin
             .AddTransient<VoteSystem>()
             .AddTransient<KnifeSystem>()
             .AddTransient<ReadySystem>()
-            .AddTransient<TimeoutSystem>();
+            .AddTransient<TimeoutSystem>()
+            .AddTransient<AutoCancelCountdownSystem>();
 
         _serviceProvider = services.BuildServiceProvider();
 

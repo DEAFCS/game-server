@@ -8,6 +8,11 @@ public class MatchData
 
     public Guid? current_match_map_id { get; set; } = Guid.Empty;
 
+    // When the match will auto-cancel if players don't connect/ready up in
+    // time. Drives the in-game milestone chat countdown; null means no
+    // auto-cancel is pending.
+    public DateTime? cancels_at { get; set; } = null;
+
     public MatchMap[] match_maps { get; set; } = new MatchMap[0];
 
     public MatchOptions options { get; set; } = new MatchOptions();

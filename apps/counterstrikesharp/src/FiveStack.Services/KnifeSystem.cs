@@ -21,8 +21,13 @@ public class KnifeSystem
     private readonly EnvironmentService _environmentService;
     private readonly IStringLocalizer _localizer;
     private Timer? _knifeRoundTimer;
+    private Timer? _knifeTimeoutTimer;
 
     private CsTeam? _winningTeam;
+
+    // Captain has this long to pick stay/switch before it auto-resolves to
+    // "stay" (the standard CS convention for an undecided knife round).
+    private const float KNIFE_DECISION_TIMEOUT_SECONDS = 60f;
 
     public KnifeSystem(
         ILogger<KnifeSystem> logger,
@@ -78,6 +83,10 @@ public class KnifeSystem
         _winningTeam = team;
 
         _knifeRoundTimer = TimerUtility.AddTimer(3, SetupKnifeMessage, TimerFlags.REPEAT);
+        _knifeTimeoutTimer = TimerUtility.AddTimer(
+            KNIFE_DECISION_TIMEOUT_SECONDS,
+            HandleDecisionTimeout
+        );
 
         SetupKnifeMessage();
 
@@ -262,10 +271,34 @@ public class KnifeSystem
         return _winningTeam;
     }
 
+    private void HandleDecisionTimeout()
+    {
+        CsTeam winningTeam = GetWinningTeam() ?? CsTeam.None;
+        MatchManager? match = _matchService.GetCurrentMatch();
+
+        if (match == null || winningTeam == CsTeam.None || !match.IsKnife())
+        {
+            return;
+        }
+
+        _logger.LogInformation("knife round decision timed out, auto-staying");
+
+        Reset();
+
+        _gameServer.Message(
+            HudDestination.Alert,
+            _localizer["knife.timeout_stay", ChatColors.Red, ChatColors.Default]
+        );
+
+        match.UpdateMapStatus(eMapStatus.Live);
+    }
+
     public void Reset()
     {
         _knifeRoundTimer?.Kill();
+        _knifeTimeoutTimer?.Kill();
         _knifeRoundTimer = null;
+        _knifeTimeoutTimer = null;
         _winningTeam = null;
     }
 }

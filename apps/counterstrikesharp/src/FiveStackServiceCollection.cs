@@ -27,5 +27,6 @@ public class FiveStackServiceCollection : IPluginServiceCollection<FiveStackPlug
         serviceCollection.AddTransient<KnifeSystem>();
         serviceCollection.AddTransient<ReadySystem>();
         serviceCollection.AddTransient<TimeoutSystem>();
+        serviceCollection.AddTransient<AutoCancelCountdownSystem>();
     }
 }
