@@ -70,22 +70,18 @@ public class KnifeSystem
         // game solid for that whole window felt worse than letting players
         // move around in warmup while they wait.
         //
-        // Order matters here: mp_warmup_start latches in whatever
-        // mp_warmuptime is set to at that exact moment, so the cfg exec (which
-        // resets mp_warmuptime to the normal, much longer pre-knife warmup
-        // duration) and our overrides both have to run *before*
-        // mp_warmup_start — not after — or CS2's own native WARMUP HUD box
-        // shows the wrong duration. The match cfg also sets
-        // mp_warmup_pausetimer 1 (so the real pre-match warmup never runs out
-        // on its own) — that has to be turned back off here too, or the
-        // countdown just sits frozen instead of ticking down.
+        // Deliberately NOT touching mp_warmuptime/mp_warmup_pausetimer here:
+        // the match cfg leaves the timer paused, so CS2's native WARMUP HUD
+        // box just shows the plain label with no number — no matter what
+        // combination of overrides was tried, that native number could never
+        // be made to reflect the real decision window, so instead we leave
+        // it blank and rely entirely on our own countdown (Center text,
+        // below) as the one source of truth for the time remaining.
         List<string> commands = [];
         if (match != null)
         {
             commands.Add($"exec 5stack.{match.GetMatchData()?.options.type.ToLower()}.cfg");
         }
-        commands.Add($"mp_warmuptime {(int)KNIFE_DECISION_TIMEOUT_SECONDS}");
-        commands.Add("mp_warmup_pausetimer 0");
         commands.Add("mp_warmup_start");
 
         _gameServer.SendCommands([.. commands]);
@@ -177,7 +173,21 @@ public class KnifeSystem
                 ChatColors.Green,
                 CommandUtility.PublicChatTrigger
             ]
+                + $"\n{FormatRemaining()}"
         );
+    }
+
+    private string FormatRemaining()
+    {
+        if (_decisionDeadline == null)
+        {
+            return "";
+        }
+
+        int remainingSeconds = (int)
+            Math.Max(0, Math.Ceiling((_decisionDeadline.Value - DateTime.UtcNow).TotalSeconds));
+
+        return $"{remainingSeconds / 60}:{remainingSeconds % 60:D2}";
     }
 
     public void Stay(CCSPlayerController player)
@@ -392,21 +402,30 @@ public class KnifeSystem
 
     private void UpdateDecisionCountdown()
     {
-        if (_decisionDeadline == null)
+        if (_decisionDeadline == null || _winningTeam == null)
         {
             return;
         }
 
-        int remainingSeconds = (int)
-            Math.Max(0, Math.Ceiling((_decisionDeadline.Value - DateTime.UtcNow).TotalSeconds));
+        string countdownText = _localizer["knife.decision_countdown", FormatRemaining()];
 
-        int minutes = remainingSeconds / 60;
-        int seconds = remainingSeconds % 60;
+        // HudDestination.Alert shares CS2's native WARMUP HUD panel, so a
+        // repeating Alert here just flickers against it. Center is free —
+        // except for the captain, who already gets their own repeating
+        // Center prompt (SetupKnifeMessage) — so send it there instead, to
+        // everyone but the captain.
+        MatchManager? match = _matchService.GetCurrentMatch();
+        CCSPlayerController? captain = match?.captainSystem?.GetTeamCaptain(_winningTeam.Value);
 
-        _gameServer.Message(
-            HudDestination.Alert,
-            _localizer["knife.decision_countdown", $"{minutes}:{seconds:D2}"]
-        );
+        foreach (CCSPlayerController player in MatchUtility.Players())
+        {
+            if (captain != null && player.SteamID == captain.SteamID)
+            {
+                continue;
+            }
+
+            player.PrintToCenter(countdownText);
+        }
     }
 
     public void Reset()
