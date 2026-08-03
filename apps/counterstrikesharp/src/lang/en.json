@@ -42,8 +42,8 @@
   "knife.timeout_stay": "No side selected in time — {0}staying {1}sides",
   "knife.skipping": "Skipping Knife.",
 
-  "auto_cancel.time_left": "{0}Match auto-cancels in {1} if players don't connect/ready up",
-  "auto_cancel.canceled": "{0}Match canceled — server shutting down",
+  "auto_cancel.warmup_countdown": "WARMUP\n{0}",
+  "auto_cancel.canceled": "Match canceled — players did not join in time",
 
   "timeout.cannot_pause_not_live": " {0}Cannot pause while match is not live",
   "timeout.admin_paused": "Admin Paused the Match",

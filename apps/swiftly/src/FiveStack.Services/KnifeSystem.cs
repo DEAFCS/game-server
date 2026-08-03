@@ -59,7 +59,11 @@ public class KnifeSystem
 
     public void SetWinningTeam(Team team)
     {
-        _gameServer.SendCommands(["mp_warmup_start;mp_pause_match"]);
+        // Warmup only, not paused — captains have up to
+        // KNIFE_DECISION_TIMEOUT_SECONDS to pick stay/switch, and freezing the
+        // game solid for that whole window felt worse than letting players
+        // move around in warmup while they wait.
+        _gameServer.SendCommands(["mp_warmup_start"]);
 
         MatchManager? match = _matchService.GetCurrentMatch();
 

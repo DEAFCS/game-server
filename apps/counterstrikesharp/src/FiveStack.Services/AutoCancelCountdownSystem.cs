@@ -8,24 +8,21 @@ using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
 
 namespace FiveStack;
 
-// Mirrors the auto-cancel deadline (matches.cancels_at) into the in-game
-// chat as coarse milestone announcements — not a live per-second countdown,
-// same as the website's warning. The actual cancellation always happens
-// server-side (CancelExpiredMatches); this only informs players it's coming.
+// Mirrors the auto-cancel deadline (matches.cancels_at) into a persistent,
+// live-ticking center-text countdown ("WARMUP" + mm:ss), refreshed every
+// second so it never disappears between milestones like a one-shot alert
+// would. The actual cancellation always happens server-side
+// (CancelExpiredMatches); this only informs players it's coming, and once
+// it hits zero keeps repeating the canceled message until the match is torn
+// down (Reset()).
 public class AutoCancelCountdownSystem
 {
-    // Largest first — Check() announces the first (largest) one the
-    // remaining time has dropped to or below, so starting mid-countdown
-    // (e.g. after a reconnect) never announces a milestone already passed.
-    private static readonly int[] Milestones = { 300, 240, 180, 120, 60, 30, 15 };
-
     private readonly GameServer _gameServer;
     private readonly ILogger<AutoCancelCountdownSystem> _logger;
     private readonly IStringLocalizer _localizer;
 
     private Timer? _timer;
     private DateTime? _cancelsAt;
-    private int? _lastAnnouncedMilestone;
 
     public AutoCancelCountdownSystem(
         ILogger<AutoCancelCountdownSystem> logger,
@@ -46,7 +43,6 @@ public class AutoCancelCountdownSystem
         }
 
         _cancelsAt = cancelsAt;
-        _lastAnnouncedMilestone = null;
 
         _timer?.Kill();
         _timer = null;
@@ -56,7 +52,7 @@ public class AutoCancelCountdownSystem
             return;
         }
 
-        _timer = TimerUtility.AddTimer(5, Check, TimerFlags.REPEAT);
+        _timer = TimerUtility.AddTimer(1, Check, TimerFlags.REPEAT);
         Check();
     }
 
@@ -72,40 +68,21 @@ public class AutoCancelCountdownSystem
 
         if (remainingSeconds <= 0)
         {
-            if (_lastAnnouncedMilestone != 0)
-            {
-                _lastAnnouncedMilestone = 0;
-                _gameServer.Message(
-                    HudDestination.Alert,
-                    _localizer["auto_cancel.canceled", ChatColors.Red]
-                );
-            }
-
-            _timer?.Kill();
-            _timer = null;
+            _gameServer.Message(HudDestination.Center, _localizer["auto_cancel.canceled"]);
             return;
         }
 
-        foreach (int milestone in Milestones)
-        {
-            if (
-                remainingSeconds <= milestone
-                && (_lastAnnouncedMilestone == null || milestone < _lastAnnouncedMilestone)
-            )
-            {
-                _lastAnnouncedMilestone = milestone;
-                _gameServer.Message(
-                    HudDestination.Alert,
-                    _localizer["auto_cancel.time_left", ChatColors.Red, FormatMilestone(milestone)]
-                );
-                break;
-            }
-        }
+        _gameServer.Message(
+            HudDestination.Center,
+            _localizer["auto_cancel.warmup_countdown", FormatTime(remainingSeconds)]
+        );
     }
 
-    private static string FormatMilestone(int seconds)
+    private static string FormatTime(int totalSeconds)
     {
-        return seconds >= 60 ? $"{seconds / 60} min" : $"{seconds} sec";
+        int minutes = totalSeconds / 60;
+        int seconds = totalSeconds % 60;
+        return $"{minutes}:{seconds:D2}";
     }
 
     public void Reset()
@@ -113,6 +90,5 @@ public class AutoCancelCountdownSystem
         _timer?.Kill();
         _timer = null;
         _cancelsAt = null;
-        _lastAnnouncedMilestone = null;
     }
 }
