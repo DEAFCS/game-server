@@ -106,7 +106,15 @@ public partial class FiveStackPlugin
 
         if (match.IsKnife())
         {
-            match.knifeSystem.SetWinningTeam(TeamUtility.TeamNumToTeam(@event.Winner));
+            // CS2 always credits CT when the knife round's timer expires with
+            // nobody dead (no bomb to force a real outcome) — resolve a fairer
+            // winner instead (see KnifeSystem.GetTimeoutWinner).
+            Team resolvedWinner =
+                reason == eWinReason.TimeRanOut
+                    ? match.knifeSystem.GetTimeoutWinner()
+                    : TeamUtility.TeamNumToTeam(@event.Winner);
+
+            match.knifeSystem.SetWinningTeam(resolvedWinner);
         }
 
         int liveTScoreAtEnd = 0;

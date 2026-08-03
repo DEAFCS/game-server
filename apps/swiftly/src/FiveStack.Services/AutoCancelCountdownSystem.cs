@@ -10,15 +10,18 @@ using static SwiftlyS2.Shared.Helper;
 namespace FiveStack;
 
 // Mirrors the auto-cancel deadline (matches.cancels_at) into a persistent,
-// live-ticking center-text countdown ("WARMUP" + mm:ss), refreshed every
-// second so it never disappears between milestones like a one-shot alert
-// would. The actual cancellation always happens server-side
-// (CancelExpiredMatches); this only informs players it's coming, and once
-// it hits zero keeps repeating the canceled message until the match is torn
-// down (Reset()).
+// live-ticking alert countdown ("WARMUP" + mm:ss), refreshed every second so
+// it never disappears between milestones like a one-shot alert would. Uses
+// MessageType.Alert rather than Center — ReadySystem's own repeating ".r to
+// ready up" reminder already occupies the center-text slot, and the two would
+// otherwise fight over it and flicker between messages. The actual
+// cancellation always happens server-side (CancelExpiredMatches); this only
+// informs players it's coming, and once it hits zero keeps repeating the
+// canceled message until the match is torn down (Reset()).
 public class AutoCancelCountdownSystem
 {
     private readonly GameServer _gameServer;
+    private readonly MatchService _matchService;
     private readonly ILogger<AutoCancelCountdownSystem> _logger;
     private readonly ILocalizer _localizer;
 
@@ -28,11 +31,13 @@ public class AutoCancelCountdownSystem
     public AutoCancelCountdownSystem(
         ILogger<AutoCancelCountdownSystem> logger,
         GameServer gameServer,
+        MatchService matchService,
         ILocalizer localizer
     )
     {
         _logger = logger;
         _gameServer = gameServer;
+        _matchService = matchService;
         _localizer = localizer;
     }
 
@@ -64,17 +69,26 @@ public class AutoCancelCountdownSystem
             return;
         }
 
+        // cancels_at also carries the (much longer) "hung live match" safety
+        // timeout once the knife round starts (Knife/Live/Overtime — "LIVE"
+        // is considered to begin at the knife round) — only the pre-game
+        // warmup deadline should show as a countdown to players.
+        if (_matchService.GetCurrentMatch()?.IsWarmup() != true)
+        {
+            return;
+        }
+
         int remainingSeconds = (int)
             Math.Floor((_cancelsAt.Value - DateTime.UtcNow).TotalSeconds);
 
         if (remainingSeconds <= 0)
         {
-            _gameServer.Message(MessageType.Center, _localizer["auto_cancel.canceled"]);
+            _gameServer.Message(MessageType.Alert, _localizer["auto_cancel.canceled"]);
             return;
         }
 
         _gameServer.Message(
-            MessageType.Center,
+            MessageType.Alert,
             _localizer["auto_cancel.warmup_countdown", FormatTime(remainingSeconds)]
         );
     }

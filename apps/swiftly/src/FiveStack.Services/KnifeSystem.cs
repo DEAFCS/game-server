@@ -273,6 +273,57 @@ public class KnifeSystem
         return _winningTeam;
     }
 
+    // Only meaningful when the knife round timed out with nobody dead — CS2's
+    // own round-end logic always credits CT in that case, which isn't a
+    // meaningful outcome for a knife round. Decided by, in order: (1) whoever
+    // has more players alive — a 2v1 shouldn't lose to a weaker but
+    // undamaged 1v2, (2) whoever has more total health remaining, (3) a coin
+    // flip if even that's tied, since neither side has any actual edge.
+    public Team GetTimeoutWinner()
+    {
+        int aliveT = 0;
+        int aliveCt = 0;
+        int healthT = 0;
+        int healthCt = 0;
+
+        foreach (IPlayer player in MatchUtility.Players())
+        {
+            int health = player.PlayerPawn?.Health ?? 0;
+            if (health <= 0)
+            {
+                continue;
+            }
+
+            Team team = TeamUtility.TeamNumToTeam(player.Controller.TeamNum);
+            if (team == Team.T)
+            {
+                aliveT++;
+                healthT += health;
+            }
+            else if (team == Team.CT)
+            {
+                aliveCt++;
+                healthCt += health;
+            }
+        }
+
+        _logger.LogInformation(
+            $"knife round timed out — alive T={aliveT} CT={aliveCt}, health T={healthT} CT={healthCt}"
+        );
+
+        if (aliveT != aliveCt)
+        {
+            return aliveT > aliveCt ? Team.T : Team.CT;
+        }
+
+        if (healthT != healthCt)
+        {
+            return healthT > healthCt ? Team.T : Team.CT;
+        }
+
+        return Random.Shared.Next(2) == 0 ? Team.T : Team.CT;
+    }
+
     private void HandleDecisionTimeout()
     {
         Team winningTeam = GetWinningTeam() ?? Team.None;
