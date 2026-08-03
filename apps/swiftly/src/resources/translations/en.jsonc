@@ -34,6 +34,7 @@
   "ready.players_not_ready": "Players Not Ready: {0} type {1}r",
 
   "knife.start": "KNIFE KNIFE KNIFE!",
+  "knife.round_won": "{0} won this knife round!",
   "knife.captain_picking": "{0} - Captain is Picking Sides!",
   "knife.captain_prompt": "As the captain you must select to {0}{1}stay {2} or {3}{4}switch",
   "knife.not_captain": " {0}You are not the captain!",

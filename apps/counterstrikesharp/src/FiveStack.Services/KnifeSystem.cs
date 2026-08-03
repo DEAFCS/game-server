@@ -76,6 +76,13 @@ public class KnifeSystem
             ]);
         }
 
+        // The map cfg above resets mp_warmuptime to the normal (much longer)
+        // pre-knife warmup duration, so CS2's own native WARMUP HUD box would
+        // otherwise show leftover time unrelated to this decision window.
+        _gameServer.SendCommands([
+            $"mp_warmuptime {(int)KNIFE_DECISION_TIMEOUT_SECONDS}",
+        ]);
+
         var rules = MatchUtility.Rules();
         if (rules != null)
         {
@@ -94,10 +101,31 @@ public class KnifeSystem
 
         SetupKnifeMessage();
 
-        _gameServer.Message(
-            HudDestination.Alert,
-            _localizer["knife.captain_picking", (team == CsTeam.Terrorist ? "Terrorist" : "CT")]
-        );
+        string teamName = team == CsTeam.Terrorist ? "Terrorist" : "CT";
+        string shortTeamName = team == CsTeam.Terrorist ? "T" : "CT";
+
+        // Everyone should see who won the knife round.
+        _gameServer.Message(HudDestination.Chat, _localizer["knife.round_won", shortTeamName]);
+
+        // "Captain is picking" only matters to the winning team — chat text
+        // plus a center-text box, both sent to just their players (the API
+        // has no per-team Alert, only per-player Chat/Center).
+        foreach (CCSPlayerController player in TeamPlayers(team))
+        {
+            player.PrintToChat(_localizer["knife.captain_picking", teamName]);
+            player.PrintToCenter(_localizer["knife.captain_picking", teamName]);
+        }
+    }
+
+    private static IEnumerable<CCSPlayerController> TeamPlayers(CsTeam team)
+    {
+        foreach (CCSPlayerController player in MatchUtility.Players())
+        {
+            if (player.Team == team)
+            {
+                yield return player;
+            }
+        }
     }
 
     public void SetupKnifeMessage()
