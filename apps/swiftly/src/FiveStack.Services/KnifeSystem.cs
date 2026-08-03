@@ -59,27 +59,28 @@ public class KnifeSystem
 
     public void SetWinningTeam(Team team)
     {
+        MatchManager? match = _matchService.GetCurrentMatch();
+
         // Warmup only, not paused — captains have up to
         // KNIFE_DECISION_TIMEOUT_SECONDS to pick stay/switch, and freezing the
         // game solid for that whole window felt worse than letting players
         // move around in warmup while they wait.
-        _gameServer.SendCommands(["mp_warmup_start"]);
-
-        MatchManager? match = _matchService.GetCurrentMatch();
-
+        //
+        // Order matters here: mp_warmup_start latches in whatever
+        // mp_warmuptime is set to at that exact moment, so the cfg exec (which
+        // resets mp_warmuptime to the normal, much longer pre-knife warmup
+        // duration) and our override to the 60s decision window both have to
+        // run *before* mp_warmup_start — not after — or CS2's own native
+        // WARMUP HUD box shows leftover time from the wrong duration.
+        List<string> commands = [];
         if (match != null)
         {
-            _gameServer.SendCommands([
-                $"exec 5stack.{match.GetMatchData()?.options.type.ToLower()}.cfg",
-            ]);
+            commands.Add($"exec 5stack.{match.GetMatchData()?.options.type.ToLower()}.cfg");
         }
+        commands.Add($"mp_warmuptime {(int)KNIFE_DECISION_TIMEOUT_SECONDS}");
+        commands.Add("mp_warmup_start");
 
-        // The map cfg above resets mp_warmuptime to the normal (much longer)
-        // pre-knife warmup duration, so CS2's own native WARMUP HUD box would
-        // otherwise show leftover time unrelated to this decision window.
-        _gameServer.SendCommands([
-            $"mp_warmuptime {(int)KNIFE_DECISION_TIMEOUT_SECONDS}",
-        ]);
+        _gameServer.SendCommands([.. commands]);
 
         var rules = MatchUtility.Rules();
         if (rules != null)
