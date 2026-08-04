@@ -94,6 +94,8 @@ public partial class FiveStackPlugin
             }
         );
 
+        match.teamEmptyForfeitSystem.Check();
+
         return HookResult.Continue;
     }
 
@@ -138,6 +140,8 @@ public partial class FiveStackPlugin
             ],
             player
         );
+
+        match.teamEmptyForfeitSystem.Check();
 
         return HookResult.Continue;
     }

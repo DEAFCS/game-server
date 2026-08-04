@@ -44,6 +44,7 @@ public class MatchManager
     private readonly RankSystem _rankSystem;
     private readonly AutoCancelCountdownSystem _autoCancelCountdownSystem;
     public DisconnectBudgetSystem disconnectBudgetSystem;
+    public TeamEmptyForfeitSystem teamEmptyForfeitSystem;
 
     private int _remainingMapChangeDelay = 0;
     public CancellationTokenSource? _mapChangeCountdownTimer;
@@ -65,6 +66,7 @@ public class MatchManager
         RankSystem rankSystem,
         AutoCancelCountdownSystem autoCancelCountdownSystem,
         DisconnectBudgetSystem disconnectBudgetSystem,
+        TeamEmptyForfeitSystem teamEmptyForfeitSystem,
         ILocalizer localizer
     )
     {
@@ -84,6 +86,7 @@ public class MatchManager
         _rankSystem = rankSystem;
         _autoCancelCountdownSystem = autoCancelCountdownSystem;
         this.disconnectBudgetSystem = disconnectBudgetSystem;
+        this.teamEmptyForfeitSystem = teamEmptyForfeitSystem;
         _localizer = localizer;
     }
 
@@ -962,6 +965,39 @@ public class MatchManager
         );
     }
 
+    // Roster (not just currently-connected players) for whichever lineup is
+    // currently playing as `team`, side-aware since sides can swap.
+    public List<MatchMember> GetLineupPlayersForTeam(Team team)
+    {
+        MatchData? matchData = GetMatchData();
+        MatchMap? currentMap = GetCurrentMap();
+
+        if (matchData == null || currentMap == null)
+        {
+            return new List<MatchMember>();
+        }
+
+        int roundsPlayed = _gameServer.GetTotalRoundsPlayed();
+
+        if (
+            TeamUtility.GetLineupSide(matchData, currentMap, matchData.lineup_1_id, roundsPlayed)
+            == team
+        )
+        {
+            return matchData.lineup_1.lineup_players;
+        }
+
+        if (
+            TeamUtility.GetLineupSide(matchData, currentMap, matchData.lineup_2_id, roundsPlayed)
+            == team
+        )
+        {
+            return matchData.lineup_2.lineup_players;
+        }
+
+        return new List<MatchMember>();
+    }
+
     private void KickBots()
     {
         if (_matchData == null)
@@ -1155,6 +1191,7 @@ public class MatchManager
         _surrenderSystem.Reset();
         _autoCancelCountdownSystem.Reset();
         disconnectBudgetSystem.Reset();
+        teamEmptyForfeitSystem.Reset();
     }
 
     private void SetConVar(string name, string value)

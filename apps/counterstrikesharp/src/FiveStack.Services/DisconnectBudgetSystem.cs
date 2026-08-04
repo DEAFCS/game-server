@@ -85,6 +85,15 @@ public class DisconnectBudgetSystem
         ScheduleMilestones(steamId, playerName, remaining);
     }
 
+    // Used by TeamEmptyForfeitSystem to tell "team is empty but someone could
+    // still reconnect" apart from "team is empty and everyone on it is
+    // already permanently banned" -- no reason to run a fresh forfeit
+    // countdown in the latter case.
+    public bool IsBudgetExhausted(ulong steamId)
+    {
+        return _usedSeconds.GetValueOrDefault(steamId, 0f) >= BudgetSeconds;
+    }
+
     public void OnPlayerReconnected(ulong steamId)
     {
         bool wasTracked = _timers.ContainsKey(steamId);

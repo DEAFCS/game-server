@@ -50,6 +50,9 @@
   "leaver.reconnect_warning": "{0} has {1} min left to reconnect before being banned",
   "leaver.banned": "{0} did not reconnect in time and has been banned",
 
+  "team_empty.forfeit_warning": "A team has no players — match forfeits in {0} min if nobody returns",
+  "team_empty.forfeited": "Match forfeited — a team had no players remaining",
+
   "timeout.cannot_pause_not_live": " {0}Cannot pause while match is not live",
   "timeout.admin_paused": "Admin Paused the Match",
   "timeout.vote.technical": "Technical Timeout",

@@ -67,6 +67,7 @@ public partial class FiveStackPlugin
             @event.UserIdPlayer.SteamID,
             player.Name
         );
+        match.teamEmptyForfeitSystem.Check();
 
         return HookResult.Continue;
     }

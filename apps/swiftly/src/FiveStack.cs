@@ -88,7 +88,8 @@ public partial class FiveStackPlugin : BasePlugin
             .AddTransient<ReadySystem>()
             .AddTransient<TimeoutSystem>()
             .AddTransient<AutoCancelCountdownSystem>()
-            .AddTransient<DisconnectBudgetSystem>();
+            .AddTransient<DisconnectBudgetSystem>()
+            .AddTransient<TeamEmptyForfeitSystem>();
 
         _serviceProvider = services.BuildServiceProvider();
 
