@@ -1,5 +1,8 @@
 using FiveStack.Utilities;
 using Microsoft.Extensions.Logging;
+using SwiftlyS2.Shared.Players;
+using SwiftlyS2.Shared.Translation;
+using static SwiftlyS2.Shared.Helper;
 
 namespace FiveStack;
 
@@ -16,27 +19,41 @@ public class DisconnectBudgetSystem
 {
     private const int BudgetSeconds = 5 * 60;
 
+    // Minutes-remaining milestones announced in global chat while someone is
+    // disconnected, e.g. "5 min left" then "3 min left" then "1 min left" --
+    // not a per-second ticker, just enough visibility to know it's running.
+    private static readonly int[] MilestoneSeconds = { 5 * 60, 3 * 60, 60 };
+
     private readonly MatchEvents _matchEvents;
     private readonly MatchService _matchService;
+    private readonly GameServer _gameServer;
+    private readonly ILocalizer _localizer;
     private readonly ILogger<DisconnectBudgetSystem> _logger;
 
     private readonly Dictionary<ulong, float> _usedSeconds = new Dictionary<ulong, float>();
     private readonly Dictionary<ulong, DateTime> _disconnectedAt = new Dictionary<ulong, DateTime>();
+    private readonly Dictionary<ulong, string> _playerNames = new Dictionary<ulong, string>();
     private readonly Dictionary<ulong, CancellationTokenSource> _timers =
         new Dictionary<ulong, CancellationTokenSource>();
+    private readonly Dictionary<ulong, List<CancellationTokenSource>> _milestoneTimers =
+        new Dictionary<ulong, List<CancellationTokenSource>>();
 
     public DisconnectBudgetSystem(
         ILogger<DisconnectBudgetSystem> logger,
         MatchEvents matchEvents,
-        MatchService matchService
+        MatchService matchService,
+        GameServer gameServer,
+        ILocalizer localizer
     )
     {
         _logger = logger;
         _matchEvents = matchEvents;
         _matchService = matchService;
+        _gameServer = gameServer;
+        _localizer = localizer;
     }
 
-    public void OnPlayerDisconnected(ulong steamId)
+    public void OnPlayerDisconnected(ulong steamId, string playerName)
     {
         MatchManager? match = _matchService.GetCurrentMatch();
         if (match == null || !match.IsInPlay())
@@ -48,6 +65,7 @@ public class DisconnectBudgetSystem
         float remaining = BudgetSeconds - used;
 
         _disconnectedAt[steamId] = DateTime.UtcNow;
+        _playerNames[steamId] = playerName;
 
         if (remaining <= 0)
         {
@@ -60,6 +78,8 @@ public class DisconnectBudgetSystem
             remaining,
             () => HandleBudgetExhausted(steamId)
         );
+
+        ScheduleMilestones(steamId, playerName, remaining);
     }
 
     public void OnPlayerReconnected(ulong steamId)
@@ -71,6 +91,8 @@ public class DisconnectBudgetSystem
             TimerUtility.Kill(timer);
             _timers.Remove(steamId);
         }
+
+        KillMilestoneTimers(steamId);
 
         if (_disconnectedAt.TryGetValue(steamId, out DateTime disconnectedAt))
         {
@@ -94,13 +116,66 @@ public class DisconnectBudgetSystem
         }
     }
 
+    private void ScheduleMilestones(ulong steamId, string playerName, float remaining)
+    {
+        List<CancellationTokenSource> timers = new List<CancellationTokenSource>();
+
+        foreach (int milestone in MilestoneSeconds)
+        {
+            if (milestone > remaining)
+            {
+                continue;
+            }
+
+            float delay = remaining - milestone;
+
+            if (delay <= 0)
+            {
+                AnnounceMilestone(playerName, milestone);
+                continue;
+            }
+
+            timers.Add(
+                TimerUtility.AddTimer(delay, () => AnnounceMilestone(playerName, milestone))
+            );
+        }
+
+        _milestoneTimers[steamId] = timers;
+    }
+
+    private void AnnounceMilestone(string playerName, int secondsRemaining)
+    {
+        int minutesRemaining = secondsRemaining / 60;
+        _gameServer.Message(
+            MessageType.Chat,
+            _localizer["leaver.reconnect_warning", playerName, minutesRemaining]
+        );
+    }
+
+    private void KillMilestoneTimers(ulong steamId)
+    {
+        if (_milestoneTimers.TryGetValue(steamId, out List<CancellationTokenSource>? timers))
+        {
+            foreach (var timer in timers)
+            {
+                TimerUtility.Kill(timer);
+            }
+            _milestoneTimers.Remove(steamId);
+        }
+    }
+
     private void HandleBudgetExhausted(ulong steamId)
     {
         _usedSeconds[steamId] = BudgetSeconds;
         _timers.Remove(steamId);
         _disconnectedAt.Remove(steamId);
+        KillMilestoneTimers(steamId);
+
+        string playerName = _playerNames.GetValueOrDefault(steamId, steamId.ToString());
 
         _logger.LogInformation($"Disconnect budget exhausted for {steamId}");
+
+        _gameServer.Message(MessageType.Chat, _localizer["leaver.banned", playerName]);
 
         _matchEvents.PublishGameEvent(
             "leaver-timeout",
@@ -114,8 +189,13 @@ public class DisconnectBudgetSystem
         {
             TimerUtility.Kill(timer);
         }
+        foreach (var steamId in _milestoneTimers.Keys.ToList())
+        {
+            KillMilestoneTimers(steamId);
+        }
         _timers.Clear();
         _usedSeconds.Clear();
         _disconnectedAt.Clear();
+        _playerNames.Clear();
     }
 }
