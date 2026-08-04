@@ -27,7 +27,7 @@ public partial class FiveStackPlugin
             return HookResult.Continue;
         }
 
-        _surrenderSystem.CancelDisconnectTimer(@event.UserIdPlayer.SteamID);
+        match.disconnectBudgetSystem.OnPlayerReconnected(@event.UserIdPlayer.SteamID);
 
         IPlayer player = @event.UserIdPlayer;
 

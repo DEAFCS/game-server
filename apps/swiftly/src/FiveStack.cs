@@ -87,7 +87,8 @@ public partial class FiveStackPlugin : BasePlugin
             .AddTransient<KnifeSystem>()
             .AddTransient<ReadySystem>()
             .AddTransient<TimeoutSystem>()
-            .AddTransient<AutoCancelCountdownSystem>();
+            .AddTransient<AutoCancelCountdownSystem>()
+            .AddTransient<DisconnectBudgetSystem>();
 
         _serviceProvider = services.BuildServiceProvider();
 

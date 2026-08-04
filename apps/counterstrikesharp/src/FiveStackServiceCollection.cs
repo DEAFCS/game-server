@@ -28,5 +28,6 @@ public class FiveStackServiceCollection : IPluginServiceCollection<FiveStackPlug
         serviceCollection.AddTransient<ReadySystem>();
         serviceCollection.AddTransient<TimeoutSystem>();
         serviceCollection.AddTransient<AutoCancelCountdownSystem>();
+        serviceCollection.AddTransient<DisconnectBudgetSystem>();
     }
 }

@@ -43,6 +43,7 @@ public class MatchManager
     public MatchService _matchService;
     private readonly RankSystem _rankSystem;
     private readonly AutoCancelCountdownSystem _autoCancelCountdownSystem;
+    public DisconnectBudgetSystem disconnectBudgetSystem;
 
     private int _remainingMapChangeDelay = 0;
     public CancellationTokenSource? _mapChangeCountdownTimer;
@@ -63,6 +64,7 @@ public class MatchManager
         MatchService matchService,
         RankSystem rankSystem,
         AutoCancelCountdownSystem autoCancelCountdownSystem,
+        DisconnectBudgetSystem disconnectBudgetSystem,
         ILocalizer localizer
     )
     {
@@ -81,6 +83,7 @@ public class MatchManager
         _matchService = matchService;
         _rankSystem = rankSystem;
         _autoCancelCountdownSystem = autoCancelCountdownSystem;
+        this.disconnectBudgetSystem = disconnectBudgetSystem;
         _localizer = localizer;
     }
 
@@ -1142,6 +1145,7 @@ public class MatchManager
         knifeSystem.Reset();
         _surrenderSystem.Reset();
         _autoCancelCountdownSystem.Reset();
+        disconnectBudgetSystem.Reset();
     }
 
     private void SetConVar(string name, string value)

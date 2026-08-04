@@ -63,10 +63,7 @@ public partial class FiveStackPlugin
                 match.PauseMatch("Player disconnected, pausing match");
             }
 
-            _surrenderSystem.SetupDisconnectTimer(
-                @event.UserIdPlayer.Controller.Team,
-                @event.UserIdPlayer.SteamID
-            );
+            match.disconnectBudgetSystem.OnPlayerDisconnected(@event.UserIdPlayer.SteamID);
         }
 
         return HookResult.Continue;
