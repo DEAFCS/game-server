@@ -160,6 +160,15 @@ public class MatchManager
             || _currentMapStatus == eMapStatus.Paused;
     }
 
+    // "Live" from the player's perspective starts at the knife round, not
+    // after it -- used by systems (e.g. DisconnectBudgetSystem) that should
+    // start enforcing the moment the knife round begins rather than waiting
+    // for IsInPlay(), which deliberately excludes the knife round itself.
+    public bool IsInPlayOrKnife()
+    {
+        return IsKnife() || IsInPlay();
+    }
+
     public bool IsPaused()
     {
         if (_currentMapStatus == eMapStatus.Paused)

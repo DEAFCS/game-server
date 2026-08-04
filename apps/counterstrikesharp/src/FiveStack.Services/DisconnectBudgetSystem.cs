@@ -55,7 +55,7 @@ public class DisconnectBudgetSystem
     public void OnPlayerDisconnected(ulong steamId, string playerName)
     {
         MatchManager? match = _matchService.GetCurrentMatch();
-        if (match == null || !match.IsInPlay())
+        if (match == null || !match.IsInPlayOrKnife())
         {
             return;
         }

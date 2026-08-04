@@ -53,18 +53,17 @@ public partial class FiveStackPlugin
         _timeoutSystem.RemovePlayerVoteOnDisconnect(player.SteamID);
         _gameBackupRounds.RemovePlayerVoteOnDisconnect(player.SteamID);
 
-        if (match.IsInPlay())
+        if (match.IsInPlay() && match.IsFreezePeriod())
         {
-            if (match.IsFreezePeriod())
-            {
-                match.PauseMatch("Player disconnected, pausing match");
-            }
-
-            match.disconnectBudgetSystem.OnPlayerDisconnected(
-                @event.Userid.SteamID,
-                player.PlayerName
-            );
+            match.PauseMatch("Player disconnected, pausing match");
         }
+
+        // Budget enforcement starts at the knife round, not just after it --
+        // OnPlayerDisconnected itself is a no-op during Warmup.
+        match.disconnectBudgetSystem.OnPlayerDisconnected(
+            @event.Userid.SteamID,
+            player.PlayerName
+        );
 
         return HookResult.Continue;
     }
