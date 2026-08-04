@@ -147,7 +147,13 @@ public partial class FiveStackPlugin
             player
         );
 
-        match.teamEmptyForfeitSystem.Check();
+        // Deliberately not calling teamEmptyForfeitSystem.Check() here: this
+        // event also fires when the engine reassigns both players' sides
+        // mid stay/switch decision, and CS2 can process that sequentially
+        // (briefly zeroing one side before the other is set), which was
+        // triggering a false "team is empty" pause during a normal side
+        // swap. OnPlayerConnect already covers the real "someone
+        // reconnected" case.
 
         return HookResult.Continue;
     }

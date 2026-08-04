@@ -20,6 +20,12 @@ namespace FiveStack;
 // and goes quiet once it passes rather than guessing which way it went.
 public class AutoCancelCountdownSystem
 {
+    // Matches CancelExpiredMatches' polling interval on the API -- the worst
+    // case wait between cancels_at expiring and the API actually resolving
+    // it (cancel or force-start). Shown as a "resolving in..." countdown so
+    // the wait doesn't look like nothing is happening.
+    private const int ResolveWorstCaseSeconds = 15;
+
     private readonly GameServer _gameServer;
     private readonly MatchService _matchService;
     private readonly ILogger<AutoCancelCountdownSystem> _logger;
@@ -93,10 +99,21 @@ public class AutoCancelCountdownSystem
         // Past the deadline, the API decides whether to actually cancel the
         // match or force it into the knife round instead (if someone already
         // connected) -- this client-side countdown can't know which, so it
-        // just stops guessing rather than showing a "canceled" message that
-        // might be wrong.
+        // shows a generic "resolving" countdown for the worst-case wait
+        // instead of guessing "canceled" or "starting" and being wrong.
         if (remainingSeconds <= 0)
         {
+            int secondsSinceDeadline = -remainingSeconds;
+            int resolvingIn = ResolveWorstCaseSeconds - secondsSinceDeadline;
+
+            if (resolvingIn > 0)
+            {
+                _gameServer.Message(
+                    MessageType.Alert,
+                    _localizer["auto_cancel.resolving", resolvingIn]
+                );
+            }
+
             return;
         }
 
