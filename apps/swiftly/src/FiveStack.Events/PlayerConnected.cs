@@ -97,6 +97,15 @@ public partial class FiveStackPlugin
 
         match.teamEmptyForfeitSystem.Check();
 
+        // Auto-resume the moment the full expected roster is back, instead
+        // of requiring someone to type .resume manually. Safe to call
+        // unconditionally -- ResumeMatch() is a no-op (beyond an idempotent
+        // mp_unpause_match) when the match isn't actually paused.
+        if (MatchUtility.PlayerCount() == match.GetExpectedPlayerCount())
+        {
+            match.ResumeMatch();
+        }
+
         return HookResult.Continue;
     }
 
