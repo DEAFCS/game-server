@@ -62,7 +62,7 @@ public class TeamEmptyForfeitSystem
             }
         }
 
-        CancelTracking();
+        CancelTracking(match);
     }
 
     private void HandleEmptyTeam(MatchManager match, Team emptyTeam)
@@ -85,6 +85,11 @@ public class TeamEmptyForfeitSystem
             Forfeit(winningTeam);
             return;
         }
+
+        // Freeze the game while the team is empty -- otherwise rounds (knife
+        // included) can play out and resolve against nobody while the
+        // forfeit countdown is still running.
+        match.PauseMatch($"{emptyTeam} has no players connected", true);
 
         _forfeitTimer = TimerUtility.AddTimer(ForfeitSeconds, () => Forfeit(winningTeam));
 
@@ -135,8 +140,9 @@ public class TeamEmptyForfeitSystem
         CancelTracking();
     }
 
-    private void CancelTracking()
+    private void CancelTracking(MatchManager? resumeMatch = null)
     {
+        bool wasTracking = _trackedEmptyTeam != null;
         _trackedEmptyTeam = null;
 
         TimerUtility.Kill(_forfeitTimer);
@@ -147,6 +153,11 @@ public class TeamEmptyForfeitSystem
             TimerUtility.Kill(timer);
         }
         _milestoneTimers.Clear();
+
+        if (wasTracking && resumeMatch != null)
+        {
+            resumeMatch.ResumeMatch();
+        }
     }
 
     public void Reset()

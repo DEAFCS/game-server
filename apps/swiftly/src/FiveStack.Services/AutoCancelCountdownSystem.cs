@@ -15,9 +15,9 @@ namespace FiveStack;
 // MessageType.Alert rather than Center — ReadySystem's own repeating ".r to
 // ready up" reminder already occupies the center-text slot, and the two would
 // otherwise fight over it and flicker between messages. The actual
-// cancellation always happens server-side (CancelExpiredMatches); this only
-// informs players it's coming, and once it hits zero keeps repeating the
-// canceled message until the match is torn down (Reset()).
+// cancel-or-force-start decision always happens server-side
+// (CancelExpiredMatches); this only informs players the deadline is coming,
+// and goes quiet once it passes rather than guessing which way it went.
 public class AutoCancelCountdownSystem
 {
     private readonly GameServer _gameServer;
@@ -90,9 +90,13 @@ public class AutoCancelCountdownSystem
         int remainingSeconds = (int)
             Math.Floor((_cancelsAt.Value - DateTime.UtcNow).TotalSeconds);
 
+        // Past the deadline, the API decides whether to actually cancel the
+        // match or force it into the knife round instead (if someone already
+        // connected) -- this client-side countdown can't know which, so it
+        // just stops guessing rather than showing a "canceled" message that
+        // might be wrong.
         if (remainingSeconds <= 0)
         {
-            _gameServer.Message(MessageType.Alert, _localizer["auto_cancel.canceled"]);
             return;
         }
 

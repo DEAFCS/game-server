@@ -415,6 +415,49 @@ public class MatchManager
 
         _matchEvents.PublishMapStatus(status, winningLineupId);
         _currentMapStatus = status;
+
+        if (status == eMapStatus.Knife)
+        {
+            SyncDisconnectBudgetForMissingPlayers();
+        }
+    }
+
+    // Anyone who left during warmup and never came back never triggered
+    // DisconnectBudgetSystem.OnPlayerDisconnected -- that only fires on the
+    // disconnect event itself, and IsInPlayOrKnife() was false at that
+    // moment. Called right as the knife round actually begins (status is
+    // already updated by here), this starts their budget retroactively
+    // instead of waiting for a disconnect event that will never come.
+    private void SyncDisconnectBudgetForMissingPlayers()
+    {
+        if (_matchData == null)
+        {
+            return;
+        }
+
+        HashSet<ulong> connected = new HashSet<ulong>(
+            MatchUtility.Players().Select(player => player.SteamID)
+        );
+
+        foreach (
+            MatchMember member in _matchData.lineup_1.lineup_players.Concat(
+                _matchData.lineup_2.lineup_players
+            )
+        )
+        {
+            if (
+                member.steam_id == null
+                || !ulong.TryParse(member.steam_id, out ulong steamId)
+                || connected.Contains(steamId)
+            )
+            {
+                continue;
+            }
+
+            disconnectBudgetSystem.OnPlayerDisconnected(steamId, member.name);
+        }
+
+        teamEmptyForfeitSystem.Check();
     }
 
     private void PublishConnectedPlayers(eMapStatus status)
