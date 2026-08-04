@@ -44,7 +44,7 @@
   "knife.decision_countdown": "Choose Stay/Switch — {0}",
   "knife.skipping": "Skipping Knife.",
 
-  "auto_cancel.warmup_countdown": "WARMUP\n{0}",
+  "auto_cancel.warmup_countdown": "{0}",
 
   "leaver.reconnect_warning": "{0} has {1} min left to reconnect before being banned",
   "leaver.banned": "{0} did not reconnect in time and has been banned",
