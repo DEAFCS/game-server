@@ -476,6 +476,16 @@ public class MatchManager
         }
 
         _gameServer.SendCommands([$"exec 5stack.{_matchData.options.type.ToLower()}.cfg"]);
+
+        // CS2 treats the exec'd cfg as a "workshop config" on workshop maps
+        // and silently drops a long list of cvars from it -- confirmed via
+        // server log: "Config 5stack.duel.cfg contains invalid commands" /
+        // "DISALLOWED WORKSHOP CONVAR: mp_team_timeout_time" (and _max).
+        // That block only applies to cvars set *from a cfg file exec*, not
+        // direct console/RCON commands (manually typing
+        // "mp_team_timeout_time 30" works fine) -- so send these two
+        // directly instead of relying on the exec above for them.
+        _gameServer.SendCommands(["mp_team_timeout_time 30", "mp_team_timeout_max 4"]);
     }
 
     // True when every roster player currently missing from the server
@@ -950,7 +960,7 @@ public class MatchManager
             SetConVar("mp_round_restart_delay", _matchData.options.round_restart_delay.Value);
         }
 
-        _gameServer.SendCommands([$"exec 5stack.{_matchData.options.type.ToLower()}.cfg"]);
+        ReapplyMatchTypeCfg();
 
         _core.Scheduler.NextTick(() =>
         {
@@ -969,28 +979,14 @@ public class MatchManager
                 _core.Scheduler.NextTick(() =>
                 {
                     // mp_restartgame silently re-applies CS2's built-in
-                    // competitive preset internally, clobbering custom
-                    // cvars (e.g. mp_team_timeout_time) set by the exec
-                    // above. Re-exec after the restart so ours win.
-                    _gameServer.SendCommands(
-                        [$"exec 5stack.{_matchData.options.type.ToLower()}.cfg"]
-                    );
+                    // competitive preset internally. Re-apply after the
+                    // restart so ours win -- also re-sends
+                    // mp_team_timeout_time/_max directly (see
+                    // ReapplyMatchTypeCfg), since CS2 rejects those two from
+                    // the exec itself as "DISALLOWED WORKSHOP CONVAR" on
+                    // workshop maps.
+                    ReapplyMatchTypeCfg();
                     _timeoutSystem.PublishTimeoutState();
-
-                    // Belt-and-suspenders: the same-tick re-exec above still
-                    // wasn't enough in testing (mp_team_timeout_time/_max
-                    // kept reading back as CS2's built-in defaults) --
-                    // whatever internal reset mp_warmup_end/mp_restartgame
-                    // trigger apparently isn't fully done within the same
-                    // frame. Re-assert once more a couple seconds later,
-                    // after that settles.
-                    TimerUtility.AddTimer(
-                        2,
-                        () =>
-                            _gameServer.SendCommands(
-                                [$"exec 5stack.{_matchData.options.type.ToLower()}.cfg"]
-                            )
-                    );
                 });
             });
         });
