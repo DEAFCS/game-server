@@ -949,6 +949,13 @@ public class MatchManager
 
                 _core.Scheduler.NextTick(() =>
                 {
+                    // mp_restartgame silently re-applies CS2's built-in
+                    // competitive preset internally, clobbering custom
+                    // cvars (e.g. mp_team_timeout_time) set by the exec
+                    // above. Re-exec after the restart so ours win.
+                    _gameServer.SendCommands(
+                        [$"exec 5stack.{_matchData.options.type.ToLower()}.cfg"]
+                    );
                     _timeoutSystem.PublishTimeoutState();
                 });
             });
