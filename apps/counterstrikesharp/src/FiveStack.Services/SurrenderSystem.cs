@@ -18,9 +18,6 @@ public class SurrenderSystem
     private readonly IServiceProvider _serviceProvider;
     public VoteSystem? surrenderingVote;
 
-    private Dictionary<CsTeam, Dictionary<ulong, Timer>> _disconnectTimers =
-        new Dictionary<CsTeam, Dictionary<ulong, Timer>>();
-
     private Guid? winningLineupId;
 
     public SurrenderSystem(
@@ -39,122 +36,12 @@ public class SurrenderSystem
         Reset();
     }
 
-    public void SetupDisconnectTimer(CsTeam team, ulong steamId)
-    {
-        MatchManager? match = _matchService.GetCurrentMatch();
-        if (match == null || !match.IsInPlay())
-        {
-            return;
-        }
-
-        MatchData? matchData = match.GetMatchData();
-        if (matchData == null)
-        {
-            return;
-        }
-
-        MatchMember? member = MatchUtility.GetMemberFromLineup(matchData, steamId.ToString(), "");
-        if (member == null)
-        {
-            return;
-        }
-
-        if (!_disconnectTimers.ContainsKey(team))
-        {
-            _disconnectTimers[team] = new Dictionary<ulong, Timer>();
-        }
-
-        _disconnectTimers[team][steamId] = TimerUtility.AddTimer(
-            60 * 3,
-            () =>
-            {
-                SetupSurrender(team);
-                PlayerAbandonedMatch(steamId);
-            }
-        );
-    }
-
-    // we dont pass the team in because they may not be on the team immediately after reconnecting
-    public void CancelDisconnectTimer(ulong steamId)
-    {
-        bool canceledTimer = false;
-        foreach (var _team in MatchUtility.Teams())
-        {
-            CsTeam team = TeamUtility.TeamNumToCSTeam(_team.TeamNum);
-
-            if (_disconnectTimers.ContainsKey(team))
-            {
-                if (_disconnectTimers[team].ContainsKey(steamId))
-                {
-                    _disconnectTimers[team][steamId].Kill();
-                    _disconnectTimers[team].Remove(steamId);
-                    canceledTimer = true;
-                }
-            }
-        }
-
-        if (!canceledTimer)
-        {
-            return;
-        }
-
-        int currentPlayers = MatchUtility.Players().Count;
-
-        int expectedPlayers = _matchService.GetCurrentMatch()?.GetExpectedPlayerCount() ?? 10;
-
-        if (
-            _matchService.GetCurrentMatch()?.IsPaused() == true
-            && currentPlayers == expectedPlayers
-        )
-        {
-            Reset();
-            _matchService.GetCurrentMatch()?.ResumeMatch();
-        }
-    }
-
-    public void SetupSurrender(CsTeam team, CCSPlayerController? player = null)
-    {
-        _logger.LogInformation($"Setting up surrender vote for {team}");
-        if (surrenderingVote != null && surrenderingVote.IsVoteActive())
-        {
-            player?.PrintToConsole(" A surrender vote is already in progress");
-            return;
-        }
-
-        surrenderingVote = _serviceProvider.GetRequiredService(typeof(VoteSystem)) as VoteSystem;
-
-        if (surrenderingVote == null)
-        {
-            return;
-        }
-
-        _logger.LogInformation($"Starting Surrender Vote for {team}");
-        surrenderingVote.StartVote(
-            "Surrender",
-            new CsTeam[] { team },
-            () =>
-            {
-                _logger.LogInformation("surrender vote passed");
-                // The surrendering team loses -- Surrender(x) credits x as
-                // the winner, so the *other* team gets it.
-                Surrender(TeamUtility.OppositeTeam(team));
-                Reset();
-            },
-            () =>
-            {
-                _logger.LogInformation("surrender vote failed");
-                Reset();
-            },
-            false,
-            30
-        );
-    }
-
-    // ".gg" -- separate from the always-available .surrender majority vote
-    // above: only usable when the caller's own team is short a player, and
-    // requires 100% consensus among whoever's currently present on that
-    // team (not the full expected roster, since some of them are the ones
-    // missing).
+    // ".gg" -- the only forfeit path now (the old always-available
+    // .surrender majority vote was removed to avoid confusing players with
+    // two different commands). Only usable when the caller's own team is
+    // short a player, and requires 100% consensus among whoever's currently
+    // present on that team (not the full expected roster, since some of
+    // them are the ones missing).
     public void SetupForfeitVote(CCSPlayerController player)
     {
         MatchManager? match = _matchService.GetCurrentMatch();
@@ -213,18 +100,20 @@ public class SurrenderSystem
         surrenderingVote.CastVote(player, true);
     }
 
+    // Called from OnRoundStart -- a .gg vote only stays valid for the round
+    // it was started in. If it's still unresolved once a new round begins,
+    // cancel it instead of letting it linger; someone has to type .gg again.
+    public void CancelPendingForfeitVote()
+    {
+        if (surrenderingVote != null && surrenderingVote.IsVoteActive())
+        {
+            surrenderingVote.CancelVote();
+        }
+    }
+
     public void Reset()
     {
         surrenderingVote = null;
-
-        foreach (var team in _disconnectTimers.Keys)
-        {
-            foreach (var timer in _disconnectTimers[team].Values)
-            {
-                timer?.Kill();
-            }
-        }
-        _disconnectTimers.Clear();
     }
 
     public bool IsSurrendering()
@@ -292,17 +181,5 @@ public class SurrenderSystem
     public Guid? GetWinningLineupId()
     {
         return winningLineupId;
-    }
-
-    public void PlayerAbandonedMatch(ulong steamId)
-    {
-        _matchEvents.PublishGameEvent(
-            "abandoned",
-            new Dictionary<string, object>
-            {
-                { "time", DateTime.Now },
-                { "steam_id", steamId.ToString() },
-            }
-        );
     }
 }

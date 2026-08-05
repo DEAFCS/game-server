@@ -44,6 +44,9 @@ public partial class FiveStackPlugin
 
         PublishPendingRound(SendBackupRound: true);
 
+        // A .gg vote only stays valid for the round it was started in.
+        _surrenderSystem.CancelPendingForfeitVote();
+
         int currentPlayers = MatchUtility.PlayerCount();
 
         int expectedPlayers = _matchService.GetCurrentMatch()?.GetExpectedPlayerCount() ?? 10;
