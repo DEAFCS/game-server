@@ -42,6 +42,15 @@ public partial class FiveStackPlugin
             return HookResult.Continue;
         }
 
+        // Safety net: re-assert the match-type cfg's custom cvars
+        // (mp_team_timeout_time/_max etc.) once the first live round has
+        // actually started -- see ReapplyMatchTypeCfg for why this is
+        // needed on top of the exec already done at Live start.
+        if (totalRoundsPlayed == 0)
+        {
+            matchManager.ReapplyMatchTypeCfg();
+        }
+
         PublishPendingRound(SendBackupRound: true);
 
         // A .gg vote only stays valid for the round it was started in.

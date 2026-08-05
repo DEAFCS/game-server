@@ -435,6 +435,25 @@ public class MatchManager
         }
     }
 
+    // Re-execs the current match-type cfg (5stack.duel/wingman/competitive
+    // .cfg). CS2 silently re-applies its own built-in competitive preset at
+    // various points around mp_restartgame/mp_warmup_end/round transitions,
+    // clobbering custom cvars like mp_team_timeout_time/_max set by our own
+    // exec -- confirmed via live testing that same-tick and even a 2s
+    // delayed re-exec after Live starts weren't reliably enough. Called
+    // again from RoundStart on the first live round as a event-anchored
+    // safety net, since that's guaranteed to run after CS2 has finished
+    // whatever it was doing internally for that round.
+    public void ReapplyMatchTypeCfg()
+    {
+        if (_matchData == null)
+        {
+            return;
+        }
+
+        _gameServer.SendCommands([$"exec 5stack.{_matchData.options.type.ToLower()}.cfg"]);
+    }
+
     // Names of roster players who haven't connected to the server yet --
     // used by AutoCancelCountdownSystem to name-and-shame in the 5/3/1-min
     // warmup warnings so everyone knows who the match is waiting on.
