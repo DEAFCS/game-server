@@ -3,6 +3,7 @@ using CounterStrikeSharp.API;
 using FiveStack.Entities;
 using FiveStack.Utilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 
 namespace FiveStack;
@@ -14,18 +15,21 @@ public class MatchService
     private readonly IServiceProvider _serviceProvider;
     private readonly EnvironmentService _environmentService;
     private readonly INetworkServerService _networkServerService;
+    private readonly IStringLocalizer _localizer;
 
     public MatchService(
         ILogger<MatchService> logger,
         IServiceProvider serviceProvider,
         EnvironmentService environmentService,
-        INetworkServerService networkServerService
+        INetworkServerService networkServerService,
+        IStringLocalizer localizer
     )
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
         _environmentService = environmentService;
         _networkServerService = networkServerService;
+        _localizer = localizer;
     }
 
     public async Task GetMatchConfigs()
@@ -115,9 +119,20 @@ public class MatchService
                 Server.NextFrame(() =>
                 {
                     Guid? previousMatchId = _currentMatch?.GetMatchData()?.id;
+                    // Only the no-show/never-connected cancellation clears a
+                    // match while it's still sitting in warmup -- a match
+                    // that actually finished/forfeited goes empty too once
+                    // the server's freed up, but that's not a cancellation
+                    // and already has its own end-of-match messaging.
+                    bool wasWarmup = _currentMatch?.IsWarmup() ?? false;
 
                     if (response.Length == 0)
                     {
+                        if (previousMatchId != null && wasWarmup)
+                        {
+                            Server.PrintToChatAll(_localizer["auto_cancel.confirmed"]);
+                        }
+
                         if (_currentMatch != null)
                         {
                             _currentMatch.Reset();

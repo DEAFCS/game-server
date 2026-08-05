@@ -4,6 +4,9 @@ using FiveStack.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SwiftlyS2.Shared;
+using SwiftlyS2.Shared.Players;
+using SwiftlyS2.Shared.Translation;
+using static SwiftlyS2.Shared.Helper;
 
 namespace FiveStack;
 
@@ -14,18 +17,21 @@ public class MatchService
     private readonly ILogger<MatchService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly EnvironmentService _environmentService;
+    private readonly ILocalizer _localizer;
 
     public MatchService(
         ISwiftlyCore core,
         ILogger<MatchService> logger,
         IServiceProvider serviceProvider,
-        EnvironmentService environmentService
+        EnvironmentService environmentService,
+        ILocalizer localizer
     )
     {
         _core = core;
         _logger = logger;
         _serviceProvider = serviceProvider;
         _environmentService = environmentService;
+        _localizer = localizer;
     }
 
     public async Task GetMatchConfigs()
@@ -115,9 +121,22 @@ public class MatchService
                 _core.Scheduler.NextTick(() =>
                 {
                     Guid? previousMatchId = _currentMatch?.GetMatchData()?.id;
+                    // Only the no-show/never-connected cancellation clears a
+                    // match while it's still sitting in warmup -- a match
+                    // that actually finished/forfeited goes empty too once
+                    // the server's freed up, but that's not a cancellation
+                    // and already has its own end-of-match messaging.
+                    bool wasWarmup = _currentMatch?.IsWarmup() ?? false;
 
                     if (response.Length == 0)
                     {
+                        if (previousMatchId != null && wasWarmup)
+                        {
+                            _core.PlayerManager.SendChat(
+                                _localizer["auto_cancel.confirmed"].Colored()
+                            );
+                        }
+
                         if (_currentMatch != null)
                         {
                             _currentMatch.Reset();

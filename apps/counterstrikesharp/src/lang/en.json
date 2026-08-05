@@ -46,6 +46,7 @@
 
   "auto_cancel.warmup_countdown": "{0}",
   "auto_cancel.resolving": "Resolving in {0}s...",
+  "auto_cancel.confirmed": "{orange}[DEAFCS] {red}Match canceled — player(s) did not join in time and have been banned",
 
   "leaver.reconnect_warning": "{0} has {1} min left to reconnect before being banned",
   "leaver.banned": "{0} did not reconnect in time and has been banned",
