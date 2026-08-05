@@ -4,6 +4,7 @@ using FiveStack.Entities;
 using FiveStack.Enums;
 using FiveStack.Utilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
 
@@ -16,6 +17,7 @@ public class SurrenderSystem
     private readonly GameServer _gameServer;
     private readonly ILogger<ReadySystem> _logger;
     private readonly IServiceProvider _serviceProvider;
+    private readonly IStringLocalizer _localizer;
     public VoteSystem? surrenderingVote;
 
     private Guid? winningLineupId;
@@ -25,7 +27,8 @@ public class SurrenderSystem
         MatchEvents matchEvents,
         MatchService matchService,
         GameServer gameServer,
-        IServiceProvider serviceProvider
+        IServiceProvider serviceProvider,
+        IStringLocalizer localizer
     )
     {
         _logger = logger;
@@ -33,6 +36,7 @@ public class SurrenderSystem
         _matchService = matchService;
         _gameServer = gameServer;
         _serviceProvider = serviceProvider;
+        _localizer = localizer;
         Reset();
     }
 
@@ -47,17 +51,40 @@ public class SurrenderSystem
         MatchManager? match = _matchService.GetCurrentMatch();
         if (match == null || !match.IsInPlayOrKnife())
         {
-            player.PrintToConsole(" Cannot call .gg while the match is not live");
+            _gameServer.Message(
+                HudDestination.Chat,
+                _localizer["forfeit.not_live", ChatColors.Red],
+                player
+            );
+            return;
+        }
+
+        int expectedTeamCount = match.GetExpectedPlayerCount() / 2;
+
+        // A "short" team in Duel (1v1) would have 0 players on it -- nobody
+        // would be left to type .gg. The automatic forfeit timer
+        // (DisconnectBudgetSystem/TeamEmptyForfeitSystem) already handles a
+        // missing 1v1 opponent, so there's nothing for this vote to do here.
+        if (expectedTeamCount <= 1)
+        {
+            _gameServer.Message(
+                HudDestination.Chat,
+                _localizer["forfeit.disabled_duel", ChatColors.Red],
+                player
+            );
             return;
         }
 
         CsTeam team = player.Team;
         int currentTeamCount = MatchUtility.Players().Count(p => p.Team == team);
-        int expectedTeamCount = match.GetExpectedPlayerCount() / 2;
 
         if (currentTeamCount >= expectedTeamCount)
         {
-            player.PrintToConsole(" .gg is only available when your team is short a player");
+            _gameServer.Message(
+                HudDestination.Chat,
+                _localizer["forfeit.not_short", ChatColors.Red],
+                player
+            );
             return;
         }
 
