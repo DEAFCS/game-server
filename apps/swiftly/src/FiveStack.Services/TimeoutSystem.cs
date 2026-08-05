@@ -347,6 +347,15 @@ public class TimeoutSystem
     {
         _teamsPendingResume.Clear();
         _requiresTeamResumeForCurrentPause = false;
+
+        // Every resume path (manual, voted, or the automatic full-roster
+        // resume in PlayerConnected) routes through here, so this is also
+        // the right place to cancel a still-pending auto-pause resume timer
+        // -- otherwise it fires again ~2 min later on an already-resumed
+        // match. Harmless (ResumeMatch no-ops when not paused), but no
+        // reason to leave a stale timer ticking.
+        TimerUtility.Kill(_autoPauseResumeTimer);
+        _autoPauseResumeTimer = null;
     }
 
     private bool ShouldRequireTeamResume()
