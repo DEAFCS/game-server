@@ -103,6 +103,10 @@ public partial class FiveStackPlugin
         // mp_unpause_match) when the match isn't actually paused.
         if (MatchUtility.PlayerCount() == match.GetExpectedPlayerCount())
         {
+            // Also cancel any queued one-per-team auto-pause for this
+            // player's side -- otherwise it still fires at the next round
+            // start even though the missing player already reconnected.
+            match.timeoutSystem.CancelPendingAutoPauseForTeam(player.Controller.Team);
             match.ResumeMatch();
         }
 

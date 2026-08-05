@@ -426,6 +426,20 @@ public class TimeoutSystem
         _logger.LogInformation($"Queued automatic technical pause for {team} at next round start");
     }
 
+    // Called when a player reconnects. If the reconnecting player's team is
+    // the one with a queued auto-pause and everyone is back, cancels the
+    // queued pause -- otherwise it fires at the next round start even though
+    // the player who disconnected is already back (the pause would then
+    // needlessly hold up a round that no longer has anyone missing).
+    public void CancelPendingAutoPauseForTeam(Team team)
+    {
+        if (_pendingAutoPauseTeam == team)
+        {
+            _pendingAutoPauseTeam = null;
+            _logger.LogInformation($"Cancelled queued automatic technical pause for {team} -- player reconnected");
+        }
+    }
+
     // Called from OnRoundStart every round -- applies a queued automatic
     // pause, if any, right as the round begins. Returns true if it did.
     public bool TriggerPendingAutoPauseIfAny()
