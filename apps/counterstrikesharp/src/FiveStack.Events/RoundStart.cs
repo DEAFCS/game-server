@@ -55,6 +55,11 @@ public partial class FiveStackPlugin
         // A .gg vote only stays valid for the round it was started in.
         _surrenderSystem.CancelPendingForfeitVote();
 
+        // Freeze period just started -- send any "player must reconnect"
+        // warning that tried to fire mid-round and got queued instead of
+        // dropped.
+        matchManager.disconnectBudgetSystem.FlushPendingAnnouncements();
+
         int currentPlayers = MatchUtility.Players().Count;
 
         int expectedPlayers = _matchService.GetCurrentMatch()?.GetExpectedPlayerCount() ?? 10;

@@ -37,6 +37,13 @@ public class DisconnectBudgetSystem
     private readonly Dictionary<ulong, List<Timer>> _milestoneTimers =
         new Dictionary<ulong, List<Timer>>();
 
+    // Milestone announcements that tried to fire mid-round (not freeze
+    // period) get queued here instead of dropped, and flushed the moment
+    // freeze period starts (see FlushPendingAnnouncements, called from
+    // OnRoundStart) -- players asked not to see this mid-round, but it must
+    // still reach them, just delayed to the next round instead of lost.
+    private readonly List<string> _pendingAnnouncements = new List<string>();
+
     public DisconnectBudgetSystem(
         ILogger<DisconnectBudgetSystem> logger,
         MatchEvents matchEvents,
@@ -155,19 +162,43 @@ public class DisconnectBudgetSystem
 
     private void AnnounceMilestone(string playerName, int secondsRemaining)
     {
-        // Only announce during freeze period -- players asked not to see
-        // this mid-round, only right before a round starts.
-        if (!(MatchUtility.Rules()?.FreezePeriod ?? false))
+        int minutesRemaining = secondsRemaining / 60;
+        SendOrQueue(
+            $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}"
+                + _localizer["leaver.reconnect_warning", playerName, minutesRemaining]
+        );
+    }
+
+    // Players asked not to see these mid-round, only right before a round
+    // starts -- but a message that's due mid-round must still reach them, so
+    // it's queued instead of dropped, and sent as soon as freeze period
+    // starts (see FlushPendingAnnouncements).
+    private void SendOrQueue(string message)
+    {
+        if (MatchUtility.Rules()?.FreezePeriod ?? false)
+        {
+            _gameServer.Message(HudDestination.Chat, message);
+            return;
+        }
+
+        _pendingAnnouncements.Add(message);
+    }
+
+    // Called from OnRoundStart, right as freeze period begins -- sends any
+    // announcement that tried to fire mid-round and got queued instead.
+    public void FlushPendingAnnouncements()
+    {
+        if (_pendingAnnouncements.Count == 0)
         {
             return;
         }
 
-        int minutesRemaining = secondsRemaining / 60;
-        _gameServer.Message(
-            HudDestination.Chat,
-            $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}"
-                + _localizer["leaver.reconnect_warning", playerName, minutesRemaining]
-        );
+        foreach (string message in _pendingAnnouncements)
+        {
+            _gameServer.Message(HudDestination.Chat, message);
+        }
+
+        _pendingAnnouncements.Clear();
     }
 
     private void KillMilestoneTimers(ulong steamId)
@@ -193,14 +224,9 @@ public class DisconnectBudgetSystem
 
         _logger.LogInformation($"Disconnect budget exhausted for {steamId}");
 
-        if (MatchUtility.Rules()?.FreezePeriod ?? false)
-        {
-            _gameServer.Message(
-                HudDestination.Chat,
-                $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}"
-                    + _localizer["leaver.banned", playerName]
-            );
-        }
+        SendOrQueue(
+            $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}" + _localizer["leaver.banned", playerName]
+        );
 
         _matchEvents.PublishGameEvent(
             "leaver-timeout",
@@ -222,5 +248,6 @@ public class DisconnectBudgetSystem
         _usedSeconds.Clear();
         _disconnectedAt.Clear();
         _playerNames.Clear();
+        _pendingAnnouncements.Clear();
     }
 }

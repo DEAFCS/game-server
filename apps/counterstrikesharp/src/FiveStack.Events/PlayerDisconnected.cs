@@ -53,10 +53,11 @@ public partial class FiveStackPlugin
         _timeoutSystem.RemovePlayerVoteOnDisconnect(player.SteamID);
         _gameBackupRounds.RemovePlayerVoteOnDisconnect(player.SteamID);
 
-        if (match.IsInPlay() && match.IsFreezePeriod())
-        {
-            match.PauseMatch("Player disconnected, pausing match");
-        }
+        // Do NOT pause immediately here -- that used to race the timed,
+        // one-per-team automatic technical pause requested below (queued to
+        // fire at the next round start via RequestAutoPauseAtNextRound), and
+        // an immediate PauseMatch() has no resume timer of its own, so the
+        // match could sit paused indefinitely instead of the intended 2 min.
 
         // Budget enforcement starts at the knife round, not just after it --
         // OnPlayerDisconnected itself is a no-op during Warmup.
