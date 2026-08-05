@@ -48,7 +48,10 @@ public partial class FiveStackPlugin
 
         int expectedPlayers = _matchService.GetCurrentMatch()?.GetExpectedPlayerCount() ?? 10;
 
-        if (currentPlayers < expectedPlayers)
+        // Don't keep re-pausing every round for someone who's already
+        // permanently banned -- they can never come back, so the match
+        // should just keep playing shorthanded (e.g. 1v2) instead.
+        if (currentPlayers < expectedPlayers && !matchManager.AllMissingPlayersAreBanned())
         {
             matchManager.PauseMatch("Waiting for players to reconnect");
         }
