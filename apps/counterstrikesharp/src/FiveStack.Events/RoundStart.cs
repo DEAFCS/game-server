@@ -71,11 +71,16 @@ public partial class FiveStackPlugin
 
         // Don't keep re-pausing every round for someone who's already
         // permanently banned -- they can never come back, so the match
-        // should just keep playing shorthanded (e.g. 1v2) instead.
+        // should just keep playing shorthanded (e.g. 1v2) instead. Same
+        // logic once their lineup's one-time auto-pause is already spent:
+        // that was the "we'll wait for you" allowance, and it's used up --
+        // the match keeps going shorthanded from here, and anyone who still
+        // wants a pause has to call .timeout/.tac themselves.
         if (
             !triggeredAutoPause
             && currentPlayers < expectedPlayers
             && !matchManager.AllMissingPlayersAreBanned()
+            && !matchManager.AllMissingPlayersLineupsUsedAutoPause()
         )
         {
             matchManager.PauseMatch("Waiting for players to reconnect");

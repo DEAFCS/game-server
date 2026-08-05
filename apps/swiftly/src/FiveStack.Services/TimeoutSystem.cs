@@ -18,13 +18,19 @@ public class TimeoutSystem
     private readonly HashSet<Team> _teamsPendingResume = new();
     private bool _requiresTeamResumeForCurrentPause;
 
-    // One automatic 2-min technical pause per team per match -- triggered
+    // One automatic 2-min technical pause per LINEUP per match -- triggered
     // when a player who already touched the server disconnects mid-match,
     // applied at the *next round start* rather than mid-round. Separate
     // from the manual/voted technical pause above, which has no duration
     // limit and can be called repeatedly.
-    private readonly HashSet<Team> _usedAutoPause = new();
-    private Team? _pendingAutoPauseTeam;
+    //
+    // Keyed by lineup_id (stable for the whole match), not Team -- a
+    // lineup's native CT/T side changes over the match (side swaps, and the
+    // knife-round stay/switch decision), so tracking "used" per Team let
+    // the same roster claim a second one-time pause simply because they'd
+    // moved from T to CT (or vice versa) since their first one.
+    private readonly HashSet<Guid> _usedAutoPause = new();
+    private Guid? _pendingAutoPauseLineupId;
     private CancellationTokenSource? _autoPauseResumeTimer;
 
     // Live-ticking "TECHNICAL TIMEOUT: mm:ss" alert, refreshed every second
@@ -424,53 +430,89 @@ public class TimeoutSystem
 
     // Called from PlayerDisconnected when someone who already touched the
     // server disconnects mid-match. Doesn't pause immediately -- just
-    // queues it for the next round start. A no-op if this team already used
-    // their one automatic pause this match.
-    public void RequestAutoPauseAtNextRound(Team team)
+    // queues it for the next round start. A no-op if this lineup already
+    // used their one automatic pause this match.
+    public void RequestAutoPauseAtNextRound(Guid lineupId)
     {
-        if (_usedAutoPause.Contains(team) || _pendingAutoPauseTeam == team)
+        if (_usedAutoPause.Contains(lineupId) || _pendingAutoPauseLineupId == lineupId)
         {
             return;
         }
 
-        _pendingAutoPauseTeam = team;
-        _logger.LogInformation($"Queued automatic technical pause for {team} at next round start");
+        _pendingAutoPauseLineupId = lineupId;
+        _logger.LogInformation($"Queued automatic technical pause for lineup {lineupId} at next round start");
     }
 
-    // Called when a player reconnects. If the reconnecting player's team is
-    // the one with a queued auto-pause and everyone is back, cancels the
+    // Called when a player reconnects. If the reconnecting player's lineup
+    // is the one with a queued auto-pause and everyone is back, cancels the
     // queued pause -- otherwise it fires at the next round start even though
     // the player who disconnected is already back (the pause would then
     // needlessly hold up a round that no longer has anyone missing).
-    public void CancelPendingAutoPauseForTeam(Team team)
+    public void CancelPendingAutoPauseForLineup(Guid lineupId)
     {
-        if (_pendingAutoPauseTeam == team)
+        if (_pendingAutoPauseLineupId == lineupId)
         {
-            _pendingAutoPauseTeam = null;
-            _logger.LogInformation($"Cancelled queued automatic technical pause for {team} -- player reconnected");
+            _pendingAutoPauseLineupId = null;
+            _logger.LogInformation($"Cancelled queued automatic technical pause for lineup {lineupId} -- player reconnected");
         }
+    }
+
+    // Whether this lineup has already used its one-time automatic pause --
+    // used by MatchManager to stop falling back to an indefinite "waiting
+    // for players" pause once the one-time budget is gone. From that point
+    // on the match should just keep playing shorthanded; anyone who still
+    // wants a pause has to call .timeout/.tac themselves.
+    public bool HasUsedAutoPauseForLineup(Guid lineupId)
+    {
+        return _usedAutoPause.Contains(lineupId);
+    }
+
+    // Live-ticking countdown is on while an automatic pause is active --
+    // used to keep MatchManager's generic ".resume to continue" reminder
+    // from also firing on the same repeating cadence and fighting the
+    // countdown for the same on-screen alert slot.
+    public bool IsAutoPauseCountdownActive => _autoPauseEndsAt != null;
+
+    private Team ResolveLineupSide(Guid lineupId)
+    {
+        MatchManager? match = _matchService.GetCurrentMatch();
+        MatchData? matchData = match?.GetMatchData();
+        MatchMap? currentMap = match?.GetCurrentMap();
+
+        if (matchData == null || currentMap == null)
+        {
+            return Team.None;
+        }
+
+        return TeamUtility.GetLineupSide(
+            matchData,
+            currentMap,
+            lineupId,
+            _gameServer.GetTotalRoundsPlayed()
+        );
     }
 
     // Called from OnRoundStart every round -- applies a queued automatic
     // pause, if any, right as the round begins. Returns true if it did.
     public bool TriggerPendingAutoPauseIfAny()
     {
-        if (_pendingAutoPauseTeam == null)
+        if (_pendingAutoPauseLineupId == null)
         {
             return false;
         }
 
-        Team team = _pendingAutoPauseTeam.Value;
-        _pendingAutoPauseTeam = null;
+        Guid lineupId = _pendingAutoPauseLineupId.Value;
+        _pendingAutoPauseLineupId = null;
 
-        if (_usedAutoPause.Contains(team))
+        if (_usedAutoPause.Contains(lineupId))
         {
             return false;
         }
 
-        _usedAutoPause.Add(team);
+        _usedAutoPause.Add(lineupId);
 
-        PauseTechMatch(_localizer["timeout.auto_technical_pause", team.ToString()]);
+        Team side = ResolveLineupSide(lineupId);
+        PauseTechMatch(_localizer["timeout.auto_technical_pause", side.ToString()]);
 
         TimerUtility.Kill(_autoPauseResumeTimer);
         _autoPauseResumeTimer = TimerUtility.AddTimer(
@@ -527,7 +569,7 @@ public class TimeoutSystem
     public void ResetAutoPause()
     {
         _usedAutoPause.Clear();
-        _pendingAutoPauseTeam = null;
+        _pendingAutoPauseLineupId = null;
         TimerUtility.Kill(_autoPauseResumeTimer);
         _autoPauseResumeTimer = null;
         StopAutoPauseCountdown();

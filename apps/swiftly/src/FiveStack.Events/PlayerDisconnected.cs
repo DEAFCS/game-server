@@ -70,11 +70,15 @@ public partial class FiveStackPlugin
         );
         match.teamEmptyForfeitSystem.Check();
 
-        // One automatic 2-min technical pause per team per match, applied
-        // at the next round start rather than immediately.
+        // One automatic 2-min technical pause per lineup per match, applied
+        // at the next round start rather than immediately. Keyed by
+        // lineup_id (member.match_lineup_id), not player.Controller.Team --
+        // a lineup's native CT/T side can change over the match (side
+        // swaps, knife round stay/switch), and player.Controller.Team is
+        // only a snapshot of the side at this exact moment.
         if (match.IsInPlayOrKnife())
         {
-            match.timeoutSystem.RequestAutoPauseAtNextRound(player.Controller.Team);
+            match.timeoutSystem.RequestAutoPauseAtNextRound(member.match_lineup_id);
         }
 
         return HookResult.Continue;
