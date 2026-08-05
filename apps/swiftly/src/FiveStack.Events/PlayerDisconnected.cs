@@ -69,6 +69,13 @@ public partial class FiveStackPlugin
         );
         match.teamEmptyForfeitSystem.Check();
 
+        // One automatic 2-min technical pause per team per match, applied
+        // at the next round start rather than immediately.
+        if (match.IsInPlayOrKnife())
+        {
+            match.timeoutSystem.RequestAutoPauseAtNextRound(player.Controller.Team);
+        }
+
         return HookResult.Continue;
     }
 }

@@ -36,6 +36,7 @@ public class MatchManager
 
     private readonly EnvironmentService _environmentService;
     private readonly TimeoutSystem _timeoutSystem;
+    public TimeoutSystem timeoutSystem => _timeoutSystem;
     public ReadySystem readySystem;
 
     // public CoachSystem _coachSystem;
@@ -1303,5 +1304,6 @@ public class MatchManager
         _autoCancelCountdownSystem.Reset();
         disconnectBudgetSystem.Reset();
         teamEmptyForfeitSystem.Reset();
+        _timeoutSystem.ResetAutoPause();
     }
 }

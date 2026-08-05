@@ -1279,6 +1279,7 @@ public class MatchManager
         _autoCancelCountdownSystem.Reset();
         disconnectBudgetSystem.Reset();
         teamEmptyForfeitSystem.Reset();
+        _timeoutSystem.ResetAutoPause();
     }
 
     private void SetConVar(string name, string value)

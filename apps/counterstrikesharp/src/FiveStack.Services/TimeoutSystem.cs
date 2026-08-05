@@ -7,13 +7,25 @@ using FiveStack.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
+using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
 
 namespace FiveStack;
 
 public class TimeoutSystem
 {
+    private const int AutoTechnicalPauseSeconds = 2 * 60;
+
     private readonly HashSet<CsTeam> _teamsPendingResume = new();
     private bool _requiresTeamResumeForCurrentPause;
+
+    // One automatic 2-min technical pause per team per match -- triggered
+    // when a player who already touched the server disconnects mid-match,
+    // applied at the *next round start* rather than mid-round. Separate
+    // from the manual/voted technical pause above, which has no duration
+    // limit and can be called repeatedly.
+    private readonly HashSet<CsTeam> _usedAutoPause = new();
+    private CsTeam? _pendingAutoPauseTeam;
+    private Timer? _autoPauseResumeTimer;
     private readonly MatchEvents _matchEvents;
     private readonly GameServer _gameServer;
     private readonly MatchService _matchService;
@@ -229,7 +241,7 @@ public class TimeoutSystem
         );
     }
 
-    public void RequestResume(CCSPlayerController? player)
+    public void RequestResume(CCSPlayerController? player, string? overrideMessage = null)
     {
         MatchData? matchData = _matchService.GetCurrentMatch()?.GetMatchData();
 
@@ -238,7 +250,7 @@ public class TimeoutSystem
             return;
         }
 
-        string resumeMessage = _localizer["timeout.admin_resumed"];
+        string resumeMessage = overrideMessage ?? _localizer["timeout.admin_resumed"];
 
         if (player != null)
         {
@@ -346,6 +358,59 @@ public class TimeoutSystem
         _teamsPendingResume.Add(CsTeam.Terrorist);
         _requiresTeamResumeForCurrentPause = true;
         _matchService.GetCurrentMatch()?.PauseMatch(pauseMessage);
+    }
+
+    // Called from PlayerDisconnected when someone who already touched the
+    // server disconnects mid-match. Doesn't pause immediately -- just
+    // queues it for the next round start. A no-op if this team already used
+    // their one automatic pause this match.
+    public void RequestAutoPauseAtNextRound(CsTeam team)
+    {
+        if (_usedAutoPause.Contains(team) || _pendingAutoPauseTeam == team)
+        {
+            return;
+        }
+
+        _pendingAutoPauseTeam = team;
+        _logger.LogInformation($"Queued automatic technical pause for {team} at next round start");
+    }
+
+    // Called from OnRoundStart every round -- applies a queued automatic
+    // pause, if any, right as the round begins. Returns true if it did.
+    public bool TriggerPendingAutoPauseIfAny()
+    {
+        if (_pendingAutoPauseTeam == null)
+        {
+            return false;
+        }
+
+        CsTeam team = _pendingAutoPauseTeam.Value;
+        _pendingAutoPauseTeam = null;
+
+        if (_usedAutoPause.Contains(team))
+        {
+            return false;
+        }
+
+        _usedAutoPause.Add(team);
+
+        PauseTechMatch(_localizer["timeout.auto_technical_pause", team.ToString()]);
+
+        _autoPauseResumeTimer?.Kill();
+        _autoPauseResumeTimer = TimerUtility.AddTimer(
+            AutoTechnicalPauseSeconds,
+            () => RequestResume(null, _localizer["timeout.auto_technical_pause_ended"])
+        );
+
+        return true;
+    }
+
+    public void ResetAutoPause()
+    {
+        _usedAutoPause.Clear();
+        _pendingAutoPauseTeam = null;
+        _autoPauseResumeTimer?.Kill();
+        _autoPauseResumeTimer = null;
     }
 
     public void CallTacTimeout(CCSPlayerController? player)

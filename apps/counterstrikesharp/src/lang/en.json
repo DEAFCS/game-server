@@ -56,6 +56,8 @@
 
   "timeout.cannot_pause_not_live": " {0}Cannot pause while match is not live",
   "timeout.admin_paused": "Admin Paused the Match",
+  "timeout.auto_technical_pause": "Automatic technical pause for {0} (2 min, one-time)",
+  "timeout.auto_technical_pause_ended": "Technical pause ended — resuming",
   "timeout.vote.technical": "Technical Timeout",
   "timeout.vote.technical_passed": "Technical Timeout Vote Passed",
   "timeout.player_paused": "{0} {1}paused the match",
