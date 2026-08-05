@@ -6,6 +6,11 @@ namespace FiveStack.Utilities
 {
     public static class TeamUtility
     {
+        public static CsTeam OppositeTeam(CsTeam team)
+        {
+            return team == CsTeam.CounterTerrorist ? CsTeam.Terrorist : CsTeam.CounterTerrorist;
+        }
+
         public static CsTeam GetLineupSide(
             MatchData matchData,
             MatchMap currentMap,

@@ -5,6 +5,11 @@ namespace FiveStack.Utilities
 {
     public static class TeamUtility
     {
+        public static Team OppositeTeam(Team team)
+        {
+            return team == Team.CT ? Team.T : Team.CT;
+        }
+
         public static Team GetLineupSide(
             MatchData matchData,
             MatchMap currentMap,

@@ -135,7 +135,9 @@ public class SurrenderSystem
             () =>
             {
                 _logger.LogInformation("surrender vote passed");
-                Surrender(team);
+                // The surrendering team loses -- Surrender(x) credits x as
+                // the winner, so the *other* team gets it.
+                Surrender(TeamUtility.OppositeTeam(team));
                 Reset();
             },
             () =>
@@ -146,6 +148,69 @@ public class SurrenderSystem
             false,
             30
         );
+    }
+
+    // ".gg" -- separate from the always-available .surrender majority vote
+    // above: only usable when the caller's own team is short a player, and
+    // requires 100% consensus among whoever's currently present on that
+    // team (not the full expected roster, since some of them are the ones
+    // missing).
+    public void SetupForfeitVote(CCSPlayerController player)
+    {
+        MatchManager? match = _matchService.GetCurrentMatch();
+        if (match == null || !match.IsInPlayOrKnife())
+        {
+            player.PrintToConsole(" Cannot call .gg while the match is not live");
+            return;
+        }
+
+        CsTeam team = player.Team;
+        int currentTeamCount = MatchUtility.Players().Count(p => p.Team == team);
+        int expectedTeamCount = match.GetExpectedPlayerCount() / 2;
+
+        if (currentTeamCount >= expectedTeamCount)
+        {
+            player.PrintToConsole(" .gg is only available when your team is short a player");
+            return;
+        }
+
+        if (surrenderingVote != null && surrenderingVote.IsVoteActive())
+        {
+            surrenderingVote.CastVote(player, true);
+            return;
+        }
+
+        _logger.LogInformation($"Setting up forfeit (.gg) vote for {team}");
+
+        surrenderingVote = _serviceProvider.GetRequiredService(typeof(VoteSystem)) as VoteSystem;
+
+        if (surrenderingVote == null)
+        {
+            return;
+        }
+
+        CsTeam winningTeam = TeamUtility.OppositeTeam(team);
+
+        surrenderingVote.StartVote(
+            "Forfeit",
+            new CsTeam[] { team },
+            () =>
+            {
+                _logger.LogInformation("forfeit (.gg) vote passed");
+                Surrender(winningTeam);
+                Reset();
+            },
+            () =>
+            {
+                _logger.LogInformation("forfeit (.gg) vote failed");
+                Reset();
+            },
+            false,
+            30,
+            true
+        );
+
+        surrenderingVote.CastVote(player, true);
     }
 
     public void Reset()

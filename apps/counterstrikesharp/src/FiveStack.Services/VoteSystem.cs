@@ -23,6 +23,7 @@ public class VoteSystem
     private Dictionary<ulong, bool> _votes = new Dictionary<ulong, bool>();
 
     private bool _captainOnly;
+    private bool _unanimous;
     private string? _voteMessage;
     private Timer? _voteTimeoutTimer;
     private Timer? _playerMessageTimer;
@@ -51,7 +52,8 @@ public class VoteSystem
         Action voteSuccessCallback,
         Action voteFailedCallback,
         bool captainOnly = false,
-        float? timeout = null
+        float? timeout = null,
+        bool unanimous = false
     )
     {
         _voteMessage = voteMessage;
@@ -59,6 +61,7 @@ public class VoteSystem
         _voteSuccessCallback = voteSuccessCallback;
         _voteFailedCallback = voteFailedCallback;
         _captainOnly = captainOnly;
+        _unanimous = unanimous;
         _votes.Clear();
         _voteStartTime = DateTime.Now;
         _voteTimeout = timeout;
@@ -335,6 +338,29 @@ public class VoteSystem
             }
 
             VoteFailed();
+            return;
+        }
+
+        if (_unanimous)
+        {
+            // Any single "no" makes 100% consensus impossible -- fail right
+            // away instead of waiting out the rest of the timeout.
+            if (totalNoVotes > 0)
+            {
+                VoteFailed();
+                return;
+            }
+
+            if (totalYesVotes >= expectedVoteCount)
+            {
+                VoteSuccess();
+                return;
+            }
+
+            if (fail)
+            {
+                VoteFailed();
+            }
             return;
         }
 
