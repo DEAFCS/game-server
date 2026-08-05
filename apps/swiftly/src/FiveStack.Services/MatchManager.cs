@@ -422,6 +422,43 @@ public class MatchManager
         }
     }
 
+    // Names of roster players who haven't connected to the server yet --
+    // used by AutoCancelCountdownSystem to name-and-shame in the 5/3/1-min
+    // warmup warnings so everyone knows who the match is waiting on.
+    public List<string> GetMissingPlayerNames()
+    {
+        if (_matchData == null)
+        {
+            return new List<string>();
+        }
+
+        HashSet<ulong> connected = new HashSet<ulong>(
+            MatchUtility.Players().Select(player => player.SteamID)
+        );
+
+        List<string> missing = new List<string>();
+
+        foreach (
+            MatchMember member in _matchData.lineup_1.lineup_players.Concat(
+                _matchData.lineup_2.lineup_players
+            )
+        )
+        {
+            if (
+                member.steam_id == null
+                || !ulong.TryParse(member.steam_id, out ulong steamId)
+                || connected.Contains(steamId)
+            )
+            {
+                continue;
+            }
+
+            missing.Add(member.name);
+        }
+
+        return missing;
+    }
+
     // True when every roster player currently missing from the server
     // already has an exhausted disconnect budget (permanently banned for
     // this match) -- so the match can keep playing shorthanded instead of

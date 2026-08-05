@@ -26,6 +26,11 @@ public class AutoCancelCountdownSystem
     // the wait doesn't look like nothing is happening.
     private const int ResolveWorstCaseSeconds = 15;
 
+    // Chat warnings (separate from the live tick above) naming whoever
+    // hasn't joined yet, fired once each as the deadline crosses these
+    // thresholds -- mirrors DisconnectBudgetSystem's milestone warnings.
+    private static readonly int[] MilestoneSeconds = { 5 * 60, 3 * 60, 60 };
+
     private readonly GameServer _gameServer;
     private readonly MatchService _matchService;
     private readonly ILogger<AutoCancelCountdownSystem> _logger;
@@ -33,6 +38,7 @@ public class AutoCancelCountdownSystem
 
     private CancellationTokenSource? _timer;
     private DateTime? _cancelsAt;
+    private readonly HashSet<int> _announcedMilestones = new HashSet<int>();
 
     public AutoCancelCountdownSystem(
         ILogger<AutoCancelCountdownSystem> logger,
@@ -55,6 +61,7 @@ public class AutoCancelCountdownSystem
         }
 
         _cancelsAt = cancelsAt;
+        _announcedMilestones.Clear();
 
         TimerUtility.Kill(_timer);
         _timer = null;
@@ -121,6 +128,44 @@ public class AutoCancelCountdownSystem
             MessageType.Alert,
             _localizer["auto_cancel.warmup_countdown", FormatTime(remainingSeconds)]
         );
+
+        AnnounceMissingPlayersMilestone(remainingSeconds);
+    }
+
+    // Chat warning naming whoever hasn't joined yet, fired once as the
+    // deadline crosses each 5/3/1-min threshold. Skipped once nobody's
+    // actually missing anymore (everyone connected -> CancelExpiredMatches
+    // will force-start instead of canceling, nothing to warn about).
+    private void AnnounceMissingPlayersMilestone(int remainingSeconds)
+    {
+        foreach (int milestone in MilestoneSeconds)
+        {
+            if (remainingSeconds > milestone || _announcedMilestones.Contains(milestone))
+            {
+                continue;
+            }
+
+            _announcedMilestones.Add(milestone);
+
+            List<string> missingPlayers =
+                _matchService.GetCurrentMatch()?.GetMissingPlayerNames() ?? new List<string>();
+
+            if (missingPlayers.Count == 0)
+            {
+                continue;
+            }
+
+            int minutesRemaining = milestone / 60;
+            _gameServer.Message(
+                MessageType.Chat,
+                $"{ChatColors.Orange}[DEAFCS] {ChatColors.Default}"
+                    + _localizer[
+                        "auto_cancel.missing_players_warning",
+                        minutesRemaining,
+                        string.Join(", ", missingPlayers)
+                    ]
+            );
+        }
     }
 
     private static string FormatTime(int totalSeconds)
@@ -135,5 +180,6 @@ public class AutoCancelCountdownSystem
         TimerUtility.Kill(_timer);
         _timer = null;
         _cancelsAt = null;
+        _announcedMilestones.Clear();
     }
 }
