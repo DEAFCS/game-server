@@ -16,7 +16,7 @@ namespace FiveStack;
 public class TeamEmptyForfeitSystem
 {
     private const int ForfeitSeconds = 5 * 60;
-    private static readonly int[] MilestoneSeconds = { 5 * 60, 4 * 60, 3 * 60, 2 * 60, 60 };
+    private static readonly int[] MilestoneSeconds = { 5 * 60, 3 * 60, 60 };
 
     private readonly MatchService _matchService;
     private readonly GameServer _gameServer;
@@ -128,13 +128,17 @@ public class TeamEmptyForfeitSystem
         int minutesRemaining = secondsRemaining / 60;
         _gameServer.Message(
             HudDestination.Chat,
-            _localizer["team_empty.forfeit_warning", minutesRemaining]
+            $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}"
+                + _localizer["team_empty.forfeit_warning", minutesRemaining]
         );
     }
 
     private void Forfeit(CsTeam winningTeam)
     {
-        _gameServer.Message(HudDestination.Chat, _localizer["team_empty.forfeited"]);
+        _gameServer.Message(
+            HudDestination.Chat,
+            $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}" + _localizer["team_empty.forfeited"]
+        );
         _surrenderSystem.Surrender(winningTeam);
         CancelTracking();
     }

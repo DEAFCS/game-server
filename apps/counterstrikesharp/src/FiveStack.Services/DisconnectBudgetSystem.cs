@@ -155,10 +155,18 @@ public class DisconnectBudgetSystem
 
     private void AnnounceMilestone(string playerName, int secondsRemaining)
     {
+        // Only announce during freeze period -- players asked not to see
+        // this mid-round, only right before a round starts.
+        if (!(MatchUtility.Rules()?.FreezePeriod ?? false))
+        {
+            return;
+        }
+
         int minutesRemaining = secondsRemaining / 60;
         _gameServer.Message(
             HudDestination.Chat,
-            _localizer["leaver.reconnect_warning", playerName, minutesRemaining]
+            $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}"
+                + _localizer["leaver.reconnect_warning", playerName, minutesRemaining]
         );
     }
 
@@ -185,7 +193,14 @@ public class DisconnectBudgetSystem
 
         _logger.LogInformation($"Disconnect budget exhausted for {steamId}");
 
-        _gameServer.Message(HudDestination.Chat, _localizer["leaver.banned", playerName]);
+        if (MatchUtility.Rules()?.FreezePeriod ?? false)
+        {
+            _gameServer.Message(
+                HudDestination.Chat,
+                $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}"
+                    + _localizer["leaver.banned", playerName]
+            );
+        }
 
         _matchEvents.PublishGameEvent(
             "leaver-timeout",
