@@ -13,6 +13,7 @@ public class SurrenderSystem
 {
     private readonly MatchEvents _matchEvents;
     private readonly MatchService _matchService;
+    private readonly GameServer _gameServer;
     private readonly ILogger<ReadySystem> _logger;
     private readonly IServiceProvider _serviceProvider;
     public VoteSystem? surrenderingVote;
@@ -26,12 +27,14 @@ public class SurrenderSystem
         ILogger<ReadySystem> logger,
         MatchEvents matchEvents,
         MatchService matchService,
+        GameServer gameServer,
         IServiceProvider serviceProvider
     )
     {
         _logger = logger;
         _matchEvents = matchEvents;
         _matchService = matchService;
+        _gameServer = gameServer;
         _serviceProvider = serviceProvider;
         Reset();
     }
@@ -178,23 +181,34 @@ public class SurrenderSystem
         }
 
         MatchData? matchData = match.GetMatchData();
-        if (matchData == null)
+        MatchMap? currentMap = match.GetCurrentMap();
+        if (matchData == null || currentMap == null)
         {
             return;
         }
 
+        // Side-aware lookup -- lineup.name is the team/clan name (e.g.
+        // "Theft's Team"), never literally "CT"/"TERRORIST", so comparing it
+        // against CSTeamToString(team) always fell through to lineup_2
+        // regardless of which team actually won. GetLineupSide resolves
+        // which lineup is currently playing as `team`, accounting for side
+        // swaps, same as GetExpectedTeam/GetLineupPlayersForTeam.
+        int roundsPlayed = _gameServer.GetTotalRoundsPlayed();
         Guid? lineup_id = null;
 
-        foreach (var _team in MatchUtility.Teams())
+        if (
+            TeamUtility.GetLineupSide(matchData, currentMap, matchData.lineup_1_id, roundsPlayed)
+            == team
+        )
         {
-            if (TeamUtility.TeamNumToCSTeam(_team.TeamNum) == team)
-            {
-                lineup_id =
-                    matchData.lineup_1.name == TeamUtility.CSTeamToString(team)
-                        ? matchData.lineup_1_id
-                        : matchData.lineup_2_id;
-                break;
-            }
+            lineup_id = matchData.lineup_1_id;
+        }
+        else if (
+            TeamUtility.GetLineupSide(matchData, currentMap, matchData.lineup_2_id, roundsPlayed)
+            == team
+        )
+        {
+            lineup_id = matchData.lineup_2_id;
         }
 
         if (lineup_id == null)
