@@ -69,6 +69,7 @@
   "timeout.vote.technical_passed": "Technical Timeout Vote Passed",
   "timeout.player_paused": "{0} {1}paused the match",
   "timeout.not_allowed": " {0}you are not allowed to call a {1} the match!",
+  "timeout.resume_blocked_team_empty": " {0}Cannot resume — the opposing team has no players connected",
   "timeout.admin_resumed": "Admin Resumed the Match",
   "timeout.vote.resume": "Resume",
   "timeout.vote.resume_passed": "Resume Vote Passed",

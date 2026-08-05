@@ -246,10 +246,31 @@ public class TimeoutSystem
 
     public void RequestResume(IPlayer? player, string? overrideMessage = null)
     {
-        MatchData? matchData = _matchService.GetCurrentMatch()?.GetMatchData();
+        MatchManager? match = _matchService.GetCurrentMatch();
+        MatchData? matchData = match?.GetMatchData();
 
         if (matchData == null)
         {
+            return;
+        }
+
+        // A completely empty team is TeamEmptyForfeitSystem's exclusive
+        // territory -- it runs its own countdown and forfeits automatically.
+        // Manual .resume must not be able to force the match to play out
+        // (and let the present side farm free rounds) against an empty team.
+        if (
+            match!.IsInPlayOrKnife()
+            && (TeamUtility.GetTeamCount(Team.CT) == 0 || TeamUtility.GetTeamCount(Team.T) == 0)
+        )
+        {
+            if (player != null)
+            {
+                _gameServer.Message(
+                    MessageType.Chat,
+                    _localizer["timeout.resume_blocked_team_empty", ChatColors.Red],
+                    player
+                );
+            }
             return;
         }
 

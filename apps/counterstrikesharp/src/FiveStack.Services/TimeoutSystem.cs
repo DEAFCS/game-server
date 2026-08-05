@@ -243,10 +243,34 @@ public class TimeoutSystem
 
     public void RequestResume(CCSPlayerController? player, string? overrideMessage = null)
     {
-        MatchData? matchData = _matchService.GetCurrentMatch()?.GetMatchData();
+        MatchManager? match = _matchService.GetCurrentMatch();
+        MatchData? matchData = match?.GetMatchData();
 
         if (matchData == null)
         {
+            return;
+        }
+
+        // A completely empty team is TeamEmptyForfeitSystem's exclusive
+        // territory -- it runs its own countdown and forfeits automatically.
+        // Manual .resume must not be able to force the match to play out
+        // (and let the present side farm free rounds) against an empty team.
+        if (
+            match!.IsInPlayOrKnife()
+            && (
+                TeamUtility.GetTeamCount(CsTeam.CounterTerrorist) == 0
+                || TeamUtility.GetTeamCount(CsTeam.Terrorist) == 0
+            )
+        )
+        {
+            if (player != null)
+            {
+                _gameServer.Message(
+                    HudDestination.Chat,
+                    _localizer["timeout.resume_blocked_team_empty", ChatColors.Red],
+                    player
+                );
+            }
             return;
         }
 
