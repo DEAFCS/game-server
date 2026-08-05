@@ -80,6 +80,20 @@ public class TimeoutSystem
             return;
         }
 
+        // Technical timeout (.tech/.pause) is tournament-only -- matchmaking
+        // and other custom matches can still call a tactical timeout
+        // (.tac), just not this one. Console/RCON (player == null) is left
+        // alone; this only gates the player-typed chat command.
+        if (player != null && match.GetMatchData()?.is_tournament_match != true)
+        {
+            _gameServer.Message(
+                HudDestination.Chat,
+                _localizer["timeout.tech_tournament_only", ChatColors.Red],
+                player
+            );
+            return;
+        }
+
         if (IsTimeoutActive())
         {
             SendTimeoutAlreadyActiveMessage(player);
