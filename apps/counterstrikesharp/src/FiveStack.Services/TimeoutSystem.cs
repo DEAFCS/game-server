@@ -167,6 +167,16 @@ public class TimeoutSystem
                 }
                 break;
             case eTimeoutSettings.Admin:
+                // "Admin" doesn't mean literally nobody else -- the team
+                // captain (and anyone tagged Administrator/Organizer on the
+                // roster) can still call it. An admin who's also playing
+                // shouldn't have to leave the match to hit console every
+                // time a pause is needed.
+                if (isCaptain)
+                {
+                    return true;
+                }
+
                 MatchData? matchData = _matchService.GetCurrentMatch()?.GetMatchData();
 
                 if (matchData == null)
@@ -174,28 +184,7 @@ public class TimeoutSystem
                     return false;
                 }
 
-                MatchMember? lineupPlayer = MatchUtility.GetMemberFromLineup(
-                    matchData,
-                    player.SteamID.ToString(),
-                    player.PlayerName
-                );
-
-                if (lineupPlayer == null)
-                {
-                    return false;
-                }
-
-                var roleEnum = PlayerRoleUtility.PlayerRoleStringToEnum(lineupPlayer.role);
-                if (
-                    roleEnum == ePlayerRoles.Administrator
-                    || roleEnum == ePlayerRoles.MatchOrganizer
-                    || roleEnum == ePlayerRoles.TournamentOrganizer
-                )
-                {
-                    return true;
-                }
-
-                return false;
+                return IsAdminOrOrganizer(player, matchData);
         }
 
         return true;
@@ -226,7 +215,22 @@ public class TimeoutSystem
                 }
                 break;
             case eTimeoutSettings.Admin:
-                return false;
+                // Same carve-out as CanPause -- captain or an
+                // Administrator/Organizer-tagged roster member can still
+                // call it even under "Admin".
+                if (isCaptain)
+                {
+                    return true;
+                }
+
+                MatchData? matchData = _matchService.GetCurrentMatch()?.GetMatchData();
+
+                if (matchData == null)
+                {
+                    return false;
+                }
+
+                return IsAdminOrOrganizer(player, matchData);
         }
 
         return true;
