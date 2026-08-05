@@ -212,6 +212,19 @@ public class MatchManager
 
     public void PauseMatch(string? message = null, bool skipUpdate = false)
     {
+        if (_timeoutSystem.IsTimeoutActive())
+        {
+            // CS2 won't hold mp_pause_match while its own native tactical
+            // timeout is running -- the pause silently fails to take, and
+            // once the timeout naturally ends on its own the match just
+            // keeps playing (reported bug: a team going empty at the same
+            // time as a tactical timeout resumed as 1v0 once the timeout
+            // ended, since our pause never actually landed). Retry once the
+            // timeout clears instead of racing it.
+            TimerUtility.AddTimer(1.0f, () => PauseMatch(message, skipUpdate));
+            return;
+        }
+
         _gameServer.SendCommands(["mp_pause_match"]);
 
         if (IsPaused())
