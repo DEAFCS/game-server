@@ -36,6 +36,8 @@ public partial class FiveStackPlugin
 
         context.Reply(_localizer["help.tac_timeout", CommandUtility.SilentChatTrigger]);
 
+        context.Reply(_localizer["help.forfeit_vote", CommandUtility.PublicChatTrigger]);
+
         context.Reply(
             _localizer[
                 "help.tech_pause",

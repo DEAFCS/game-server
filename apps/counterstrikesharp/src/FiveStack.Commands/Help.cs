@@ -40,6 +40,8 @@ public partial class FiveStackPlugin
 
         command.ReplyToCommand(_localizer["help.tac_timeout", CommandUtility.SilentChatTrigger]);
 
+        command.ReplyToCommand(_localizer["help.forfeit_vote", CommandUtility.PublicChatTrigger]);
+
         command.ReplyToCommand(
             _localizer[
                 "help.tech_pause",

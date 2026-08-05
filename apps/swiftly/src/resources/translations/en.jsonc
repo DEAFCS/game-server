@@ -5,6 +5,7 @@
   "help.captains": " {0}captain, {1}release-captain - Captains",
   "help.show_captains": " {0}captains - Show captains",
   "help.tac_timeout": " {0}tac - Tactical timeout",
+  "help.forfeit_vote": " {0}gg - Vote to forfeit (only when your team is short a player)",
   "help.tech_pause": " {0}tech, {1}resume - Technical pause",
   "help.rules": " {0}rules - Rules",
   "help.restore_round": " {0}reset <round> - Restore round",
@@ -51,7 +52,7 @@
   "leaver.reconnect_warning": "{0} has {1} min left to reconnect before being banned",
   "leaver.banned": "{0} did not reconnect in time and has been banned",
 
-  "auto_cancel.missing_players_warning": "{1} - {0} min left to join before the match is canceled and they are banned",
+  "auto_cancel.missing_players_warning": "{1} - {0} min left to join before the match is canceled",
 
   "team_empty.forfeit_warning": "A team has no players — match forfeits in {0} min if nobody returns",
   "team_empty.forfeited": "Match forfeited — a team had no players remaining",
