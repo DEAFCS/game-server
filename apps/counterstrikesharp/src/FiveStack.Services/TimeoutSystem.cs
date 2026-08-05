@@ -1,5 +1,6 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
 using FiveStack.Entities;
 using FiveStack.Enums;
@@ -26,6 +27,16 @@ public class TimeoutSystem
     private readonly HashSet<CsTeam> _usedAutoPause = new();
     private CsTeam? _pendingAutoPauseTeam;
     private Timer? _autoPauseResumeTimer;
+
+    // Live-ticking "TECHNICAL TIMEOUT: mm:ss" alert, refreshed every second
+    // for the duration of the auto pause. mp_pause_match (used above) is a
+    // generic, indefinite admin pause -- unlike a native tactical timeout
+    // (.tac), CS2 has no idea it's supposed to end in 2 min and shows no
+    // countdown of its own, so without this players just see a static
+    // "MATCH PAUSED" with no indication anything is timed. Mirrors
+    // AutoCancelCountdownSystem's live countdown for the same reason.
+    private Timer? _autoPauseCountdownTimer;
+    private DateTime? _autoPauseEndsAt;
     private readonly MatchEvents _matchEvents;
     private readonly GameServer _gameServer;
     private readonly MatchService _matchService;
@@ -395,6 +406,7 @@ public class TimeoutSystem
         // reason to leave a stale timer ticking.
         _autoPauseResumeTimer?.Kill();
         _autoPauseResumeTimer = null;
+        StopAutoPauseCountdown();
     }
 
     private bool ShouldRequireTeamResume()
@@ -467,7 +479,50 @@ public class TimeoutSystem
             () => RequestResume(null, _localizer["timeout.auto_technical_pause_ended"])
         );
 
+        StartAutoPauseCountdown();
+
         return true;
+    }
+
+    private void StartAutoPauseCountdown()
+    {
+        _autoPauseEndsAt = DateTime.UtcNow.AddSeconds(AutoTechnicalPauseSeconds);
+
+        _autoPauseCountdownTimer?.Kill();
+        _autoPauseCountdownTimer = TimerUtility.AddTimer(1, TickAutoPauseCountdown, TimerFlags.REPEAT);
+        TickAutoPauseCountdown();
+    }
+
+    private void TickAutoPauseCountdown()
+    {
+        if (_autoPauseEndsAt == null)
+        {
+            StopAutoPauseCountdown();
+            return;
+        }
+
+        int remainingSeconds = (int)Math.Ceiling((_autoPauseEndsAt.Value - DateTime.UtcNow).TotalSeconds);
+
+        if (remainingSeconds <= 0)
+        {
+            StopAutoPauseCountdown();
+            return;
+        }
+
+        int minutes = remainingSeconds / 60;
+        int seconds = remainingSeconds % 60;
+
+        _gameServer.Message(
+            HudDestination.Alert,
+            _localizer["timeout.auto_technical_pause_countdown", $"{minutes}:{seconds:D2}"]
+        );
+    }
+
+    private void StopAutoPauseCountdown()
+    {
+        _autoPauseEndsAt = null;
+        _autoPauseCountdownTimer?.Kill();
+        _autoPauseCountdownTimer = null;
     }
 
     public void ResetAutoPause()
@@ -476,6 +531,7 @@ public class TimeoutSystem
         _pendingAutoPauseTeam = null;
         _autoPauseResumeTimer?.Kill();
         _autoPauseResumeTimer = null;
+        StopAutoPauseCountdown();
     }
 
     public void CallTacTimeout(CCSPlayerController? player)

@@ -66,6 +66,7 @@
   "timeout.admin_paused": "Admin Paused the Match",
   "timeout.auto_technical_pause": "Automatic technical pause for {0} (2 min, one-time)",
   "timeout.auto_technical_pause_ended": "Technical pause ended — resuming",
+  "timeout.auto_technical_pause_countdown": "TECHNICAL TIMEOUT: {0}",
   "timeout.vote.technical": "Technical Timeout",
   "timeout.vote.technical_passed": "Technical Timeout Vote Passed",
   "timeout.player_paused": "{0} {1}paused the match",
