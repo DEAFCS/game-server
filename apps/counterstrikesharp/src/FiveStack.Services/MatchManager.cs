@@ -969,6 +969,21 @@ public class MatchManager
                         [$"exec 5stack.{_matchData.options.type.ToLower()}.cfg"]
                     );
                     _timeoutSystem.PublishTimeoutState();
+
+                    // Belt-and-suspenders: the same-tick re-exec above still
+                    // wasn't enough in testing (mp_team_timeout_time/_max
+                    // kept reading back as CS2's built-in defaults) --
+                    // whatever internal reset mp_warmup_end/mp_restartgame
+                    // trigger apparently isn't fully done within the same
+                    // frame. Re-assert once more a couple seconds later,
+                    // after that settles.
+                    TimerUtility.AddTimer(
+                        2.0f,
+                        () =>
+                            _gameServer.SendCommands(
+                                [$"exec 5stack.{_matchData.options.type.ToLower()}.cfg"]
+                            )
+                    );
                 });
             });
         });
