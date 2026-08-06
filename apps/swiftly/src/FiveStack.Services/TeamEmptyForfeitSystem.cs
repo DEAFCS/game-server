@@ -50,9 +50,16 @@ public class TeamEmptyForfeitSystem
         MatchManager? match = _matchService.GetCurrentMatch();
         if (match == null || !match.IsInPlayOrKnife())
         {
+            _logger.LogInformation(
+                $"Check: skipping, match={match != null} isInPlayOrKnife={match?.IsInPlayOrKnife()}"
+            );
             CancelTracking();
             return;
         }
+
+        int ctCount = TeamUtility.GetTeamCount(Team.CT);
+        int tCount = TeamUtility.GetTeamCount(Team.T);
+        _logger.LogInformation($"Check: ctCount={ctCount} tCount={tCount}");
 
         foreach (Team team in new[] { Team.CT, Team.T })
         {
@@ -70,8 +77,11 @@ public class TeamEmptyForfeitSystem
     {
         if (_trackedEmptyTeam == emptyTeam)
         {
+            _logger.LogInformation($"HandleEmptyTeam({emptyTeam}): already tracking, skipping");
             return;
         }
+
+        _logger.LogInformation($"HandleEmptyTeam({emptyTeam}): now tracking, will pause + start forfeit clock");
 
         CancelTracking();
         _trackedEmptyTeam = emptyTeam;
