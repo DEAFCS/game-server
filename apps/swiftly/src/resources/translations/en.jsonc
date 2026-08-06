@@ -33,6 +33,9 @@
   "ready.not_ready": "not ready",
   "ready.marked": "You have been marked {0}",
   "ready.players_not_ready": "Players Not Ready: {0} type {1}r",
+  "ready.tournament_only": " {0}.ready/.unready are only available in tournament matches — the match starts on its own once everyone's connected",
+
+  "warmup.all_connected": "All players connected — match starting in {0}s",
 
   "knife.start": "KNIFE KNIFE KNIFE!",
   "knife.round_won": "{0} won this knife round!",

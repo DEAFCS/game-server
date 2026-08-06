@@ -45,6 +45,7 @@ public class MatchManager
     private readonly AutoCancelCountdownSystem _autoCancelCountdownSystem;
     public DisconnectBudgetSystem disconnectBudgetSystem;
     public TeamEmptyForfeitSystem teamEmptyForfeitSystem;
+    public WarmupShortenSystem warmupShortenSystem;
 
     private int _remainingMapChangeDelay = 0;
     public CancellationTokenSource? _mapChangeCountdownTimer;
@@ -67,6 +68,7 @@ public class MatchManager
         AutoCancelCountdownSystem autoCancelCountdownSystem,
         DisconnectBudgetSystem disconnectBudgetSystem,
         TeamEmptyForfeitSystem teamEmptyForfeitSystem,
+        WarmupShortenSystem warmupShortenSystem,
         ILocalizer localizer
     )
     {
@@ -87,6 +89,7 @@ public class MatchManager
         _autoCancelCountdownSystem = autoCancelCountdownSystem;
         this.disconnectBudgetSystem = disconnectBudgetSystem;
         this.teamEmptyForfeitSystem = teamEmptyForfeitSystem;
+        this.warmupShortenSystem = warmupShortenSystem;
         _localizer = localizer;
     }
 
@@ -989,7 +992,18 @@ public class MatchManager
                 _gameServer.SendCommands(["mp_warmup_start"]);
             }
 
-            readySystem.Setup();
+            // .ready/.unready are tournament-only (see Ready.cs) --
+            // matchmaking has nothing for ReadySystem to track, so skip its
+            // hint/timer setup there and let WarmupShortenSystem take over
+            // once everyone's actually connected.
+            if (_matchData.is_tournament_match)
+            {
+                readySystem.Setup();
+            }
+            else
+            {
+                warmupShortenSystem.Check();
+            }
         });
     }
 
@@ -1424,6 +1438,7 @@ public class MatchManager
         _autoCancelCountdownSystem.Reset();
         disconnectBudgetSystem.Reset();
         teamEmptyForfeitSystem.Reset();
+        warmupShortenSystem.Reset();
         _timeoutSystem.ResetAutoPause();
     }
 

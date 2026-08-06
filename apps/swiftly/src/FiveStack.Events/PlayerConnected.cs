@@ -96,6 +96,7 @@ public partial class FiveStackPlugin
         );
 
         match.teamEmptyForfeitSystem.Check();
+        match.warmupShortenSystem.Check();
 
         // Auto-resume the moment the full expected roster is back, instead
         // of requiring someone to type .resume manually. Safe to call

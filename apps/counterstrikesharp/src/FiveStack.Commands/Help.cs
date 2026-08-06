@@ -20,7 +20,18 @@ public partial class FiveStackPlugin
 
         command.ReplyToCommand(_localizer["help.available"]);
 
-        command.ReplyToCommand(_localizer["help.toggle_ready", CommandUtility.PublicChatTrigger]);
+        // .ready/.unready and .tech/.resume are tournament-only -- don't
+        // list commands that will just get rejected in matchmaking.
+        bool isTournamentMatch =
+            _matchService.GetCurrentMatch()?.GetMatchData()?.is_tournament_match == true;
+
+        if (isTournamentMatch)
+        {
+            command.ReplyToCommand(
+                _localizer["help.toggle_ready", CommandUtility.PublicChatTrigger]
+            );
+        }
+
         command.ReplyToCommand(
             _localizer[
                 "help.knife_round",
@@ -42,10 +53,6 @@ public partial class FiveStackPlugin
 
         command.ReplyToCommand(_localizer["help.forfeit_vote", CommandUtility.PublicChatTrigger]);
 
-        // .tech/.resume are tournament-only -- don't list a command that
-        // will just get rejected in matchmaking.
-        bool isTournamentMatch =
-            _matchService.GetCurrentMatch()?.GetMatchData()?.is_tournament_match == true;
         if (isTournamentMatch)
         {
             command.ReplyToCommand(

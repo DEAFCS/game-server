@@ -30,5 +30,6 @@ public class FiveStackServiceCollection : IPluginServiceCollection<FiveStackPlug
         serviceCollection.AddTransient<AutoCancelCountdownSystem>();
         serviceCollection.AddTransient<DisconnectBudgetSystem>();
         serviceCollection.AddTransient<TeamEmptyForfeitSystem>();
+        serviceCollection.AddTransient<WarmupShortenSystem>();
     }
 }

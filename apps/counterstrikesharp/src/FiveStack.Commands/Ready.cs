@@ -1,6 +1,8 @@
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Utils;
+using FiveStack.Entities;
 
 namespace FiveStack;
 
@@ -19,6 +21,20 @@ public partial class FiveStackPlugin
 
         if (player == null || match == null || !match.IsWarmup())
         {
+            return;
+        }
+
+        // .ready/.unready are tournament-only -- matchmaking auto-advances
+        // once everyone's connected (WarmupShortenSystem), no manual
+        // ready-up step needed there.
+        MatchData? matchData = match.GetMatchData();
+        if (matchData?.is_tournament_match != true)
+        {
+            _gameServer.Message(
+                HudDestination.Chat,
+                _localizer["ready.tournament_only", ChatColors.Red],
+                player
+            );
             return;
         }
 

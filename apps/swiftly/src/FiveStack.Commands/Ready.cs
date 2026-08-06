@@ -1,6 +1,8 @@
+using FiveStack.Entities;
 using SwiftlyS2.Shared.Commands;
 using SwiftlyS2.Shared.Players;
 using SwiftlyS2.Shared.SchemaDefinitions;
+using static SwiftlyS2.Shared.Helper;
 
 namespace FiveStack;
 
@@ -18,6 +20,20 @@ public partial class FiveStackPlugin
 
         if (player == null || match == null || !match.IsWarmup())
         {
+            return;
+        }
+
+        // .ready/.unready are tournament-only -- matchmaking auto-advances
+        // once everyone's connected (WarmupShortenSystem), no manual
+        // ready-up step needed there.
+        MatchData? matchData = match.GetMatchData();
+        if (matchData?.is_tournament_match != true)
+        {
+            _gameServer.Message(
+                MessageType.Chat,
+                _localizer["ready.tournament_only", ChatColors.Red],
+                player
+            );
             return;
         }
 

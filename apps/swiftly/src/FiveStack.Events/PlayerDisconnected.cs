@@ -50,6 +50,7 @@ public partial class FiveStackPlugin
         {
             match.readySystem.UnreadyPlayer(player);
             match.captainSystem.RemoveCaptain(@event.UserIdPlayer);
+            match.warmupShortenSystem.Check();
         }
 
         _surrenderSystem.RemovePlayerVoteOnDisconnect(player.SteamID);
