@@ -13,35 +13,9 @@ namespace FiveStack;
 
 public class TimeoutSystem
 {
-    private const int AutoTechnicalPauseSeconds = 2 * 60;
-
     private readonly HashSet<Team> _teamsPendingResume = new();
     private bool _requiresTeamResumeForCurrentPause;
 
-    // One automatic 2-min technical pause per LINEUP per match -- triggered
-    // when a player who already touched the server disconnects mid-match,
-    // applied at the *next round start* rather than mid-round. Separate
-    // from the manual/voted technical pause above, which has no duration
-    // limit and can be called repeatedly.
-    //
-    // Keyed by lineup_id (stable for the whole match), not Team -- a
-    // lineup's native CT/T side changes over the match (side swaps, and the
-    // knife-round stay/switch decision), so tracking "used" per Team let
-    // the same roster claim a second one-time pause simply because they'd
-    // moved from T to CT (or vice versa) since their first one.
-    private readonly HashSet<Guid> _usedAutoPause = new();
-    private Guid? _pendingAutoPauseLineupId;
-    private CancellationTokenSource? _autoPauseResumeTimer;
-
-    // Live-ticking "TECHNICAL TIMEOUT: mm:ss" alert, refreshed every second
-    // for the duration of the auto pause. mp_pause_match (used above) is a
-    // generic, indefinite admin pause -- unlike a native tactical timeout
-    // (.tac), CS2 has no idea it's supposed to end in 2 min and shows no
-    // countdown of its own, so without this players just see a static
-    // "MATCH PAUSED" with no indication anything is timed. Mirrors
-    // AutoCancelCountdownSystem's live countdown for the same reason.
-    private CancellationTokenSource? _autoPauseCountdownTimer;
-    private DateTime? _autoPauseEndsAt;
     private readonly ISwiftlyCore _core;
     private readonly MatchEvents _matchEvents;
     private readonly GameServer _gameServer;
@@ -417,16 +391,6 @@ public class TimeoutSystem
     {
         _teamsPendingResume.Clear();
         _requiresTeamResumeForCurrentPause = false;
-
-        // Every resume path (manual, voted, or the automatic full-roster
-        // resume in PlayerConnected) routes through here, so this is also
-        // the right place to cancel a still-pending auto-pause resume timer
-        // -- otherwise it fires again ~2 min later on an already-resumed
-        // match. Harmless (ResumeMatch no-ops when not paused), but no
-        // reason to leave a stale timer ticking.
-        TimerUtility.Kill(_autoPauseResumeTimer);
-        _autoPauseResumeTimer = null;
-        StopAutoPauseCountdown();
     }
 
     private bool ShouldRequireTeamResume()
@@ -441,153 +405,6 @@ public class TimeoutSystem
         _teamsPendingResume.Add(Team.T);
         _requiresTeamResumeForCurrentPause = true;
         _matchService.GetCurrentMatch()?.PauseMatch(pauseMessage);
-    }
-
-    // Called from PlayerDisconnected when someone who already touched the
-    // server disconnects mid-match. Doesn't pause immediately -- just
-    // queues it for the next round start. A no-op if this lineup already
-    // used their one automatic pause this match.
-    public void RequestAutoPauseAtNextRound(Guid lineupId)
-    {
-        if (_usedAutoPause.Contains(lineupId) || _pendingAutoPauseLineupId == lineupId)
-        {
-            return;
-        }
-
-        _pendingAutoPauseLineupId = lineupId;
-        _logger.LogInformation($"Queued automatic technical pause for lineup {lineupId} at next round start");
-    }
-
-    // Called when a player reconnects. If the reconnecting player's lineup
-    // is the one with a queued auto-pause and everyone is back, cancels the
-    // queued pause -- otherwise it fires at the next round start even though
-    // the player who disconnected is already back (the pause would then
-    // needlessly hold up a round that no longer has anyone missing).
-    public void CancelPendingAutoPauseForLineup(Guid lineupId)
-    {
-        if (_pendingAutoPauseLineupId == lineupId)
-        {
-            _pendingAutoPauseLineupId = null;
-            _logger.LogInformation($"Cancelled queued automatic technical pause for lineup {lineupId} -- player reconnected");
-        }
-    }
-
-    // Whether this lineup has already used its one-time automatic pause --
-    // used by MatchManager to stop falling back to an indefinite "waiting
-    // for players" pause once the one-time budget is gone. From that point
-    // on the match should just keep playing shorthanded; anyone who still
-    // wants a pause has to call .timeout/.tac themselves.
-    public bool HasUsedAutoPauseForLineup(Guid lineupId)
-    {
-        return _usedAutoPause.Contains(lineupId);
-    }
-
-    // Live-ticking countdown is on while an automatic pause is active --
-    // used to keep MatchManager's generic ".resume to continue" reminder
-    // from also firing on the same repeating cadence and fighting the
-    // countdown for the same on-screen alert slot.
-    public bool IsAutoPauseCountdownActive => _autoPauseEndsAt != null;
-
-    private Team ResolveLineupSide(Guid lineupId)
-    {
-        MatchManager? match = _matchService.GetCurrentMatch();
-        MatchData? matchData = match?.GetMatchData();
-        MatchMap? currentMap = match?.GetCurrentMap();
-
-        if (matchData == null || currentMap == null)
-        {
-            return Team.None;
-        }
-
-        return TeamUtility.GetLineupSide(
-            matchData,
-            currentMap,
-            lineupId,
-            _gameServer.GetTotalRoundsPlayed()
-        );
-    }
-
-    // Called from OnRoundStart every round -- applies a queued automatic
-    // pause, if any, right as the round begins. Returns true if it did.
-    public bool TriggerPendingAutoPauseIfAny()
-    {
-        if (_pendingAutoPauseLineupId == null)
-        {
-            return false;
-        }
-
-        Guid lineupId = _pendingAutoPauseLineupId.Value;
-        _pendingAutoPauseLineupId = null;
-
-        if (_usedAutoPause.Contains(lineupId))
-        {
-            return false;
-        }
-
-        _usedAutoPause.Add(lineupId);
-
-        Team side = ResolveLineupSide(lineupId);
-        PauseTechMatch(_localizer["timeout.auto_technical_pause", side.ToString()]);
-
-        TimerUtility.Kill(_autoPauseResumeTimer);
-        _autoPauseResumeTimer = TimerUtility.AddTimer(
-            AutoTechnicalPauseSeconds,
-            () => RequestResume(null, _localizer["timeout.auto_technical_pause_ended"])
-        );
-
-        StartAutoPauseCountdown();
-
-        return true;
-    }
-
-    private void StartAutoPauseCountdown()
-    {
-        _autoPauseEndsAt = DateTime.UtcNow.AddSeconds(AutoTechnicalPauseSeconds);
-
-        TimerUtility.Kill(_autoPauseCountdownTimer);
-        _autoPauseCountdownTimer = TimerUtility.Repeat(1, TickAutoPauseCountdown);
-        TickAutoPauseCountdown();
-    }
-
-    private void TickAutoPauseCountdown()
-    {
-        if (_autoPauseEndsAt == null)
-        {
-            StopAutoPauseCountdown();
-            return;
-        }
-
-        int remainingSeconds = (int)Math.Ceiling((_autoPauseEndsAt.Value - DateTime.UtcNow).TotalSeconds);
-
-        if (remainingSeconds <= 0)
-        {
-            StopAutoPauseCountdown();
-            return;
-        }
-
-        int minutes = remainingSeconds / 60;
-        int seconds = remainingSeconds % 60;
-
-        _gameServer.Message(
-            MessageType.Alert,
-            _localizer["timeout.auto_technical_pause_countdown", $"{minutes}:{seconds:D2}"]
-        );
-    }
-
-    private void StopAutoPauseCountdown()
-    {
-        _autoPauseEndsAt = null;
-        TimerUtility.Kill(_autoPauseCountdownTimer);
-        _autoPauseCountdownTimer = null;
-    }
-
-    public void ResetAutoPause()
-    {
-        _usedAutoPause.Clear();
-        _pendingAutoPauseLineupId = null;
-        TimerUtility.Kill(_autoPauseResumeTimer);
-        _autoPauseResumeTimer = null;
-        StopAutoPauseCountdown();
     }
 
     public void CallTacTimeout(IPlayer? player)

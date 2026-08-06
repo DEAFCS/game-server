@@ -54,11 +54,11 @@ public partial class FiveStackPlugin
         _timeoutSystem.RemovePlayerVoteOnDisconnect(player.SteamID);
         _gameBackupRounds.RemovePlayerVoteOnDisconnect(player.SteamID);
 
-        // Do NOT pause immediately here -- that used to race the timed,
-        // one-per-team automatic technical pause requested below (queued to
-        // fire at the next round start via RequestAutoPauseAtNextRound), and
-        // an immediate PauseMatch() has no resume timer of its own, so the
-        // match could sit paused indefinitely instead of the intended 2 min.
+        // Deliberately not pausing immediately here -- the match keeps
+        // playing shorthanded from the moment someone disconnects.
+        // RoundStart's "waiting for players to reconnect" pause (if the
+        // team isn't fully empty) is the only automatic pause left; anyone
+        // who wants a pause right now has to call .timeout/.tac themselves.
 
         // Budget enforcement starts at the knife round, not just after it --
         // OnPlayerDisconnected itself is a no-op during Warmup.
@@ -67,17 +67,6 @@ public partial class FiveStackPlugin
             player.PlayerName
         );
         match.teamEmptyForfeitSystem.Check();
-
-        // One automatic 2-min technical pause per lineup per match, applied
-        // at the next round start rather than immediately. Keyed by
-        // lineup_id (member.match_lineup_id), not player.Team -- a lineup's
-        // native CT/T side can change over the match (side swaps, knife
-        // round stay/switch), and player.Team is only a snapshot of the
-        // side at this exact moment.
-        if (match.IsInPlayOrKnife())
-        {
-            match.timeoutSystem.RequestAutoPauseAtNextRound(member.match_lineup_id);
-        }
 
         return HookResult.Continue;
     }

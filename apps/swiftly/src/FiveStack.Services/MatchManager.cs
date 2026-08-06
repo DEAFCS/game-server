@@ -43,6 +43,7 @@ public class MatchManager
     public MatchService _matchService;
     private readonly RankSystem _rankSystem;
     private readonly AutoCancelCountdownSystem _autoCancelCountdownSystem;
+    public AutoCancelCountdownSystem autoCancelCountdownSystem => _autoCancelCountdownSystem;
     public DisconnectBudgetSystem disconnectBudgetSystem;
     public TeamEmptyForfeitSystem teamEmptyForfeitSystem;
     public WarmupShortenSystem warmupShortenSystem;
@@ -251,11 +252,6 @@ public class MatchManager
                     !IsFreezePeriod()
                     || !IsPaused()
                     || _backUpManagement.IsResettingRound()
-                    // The auto-pause's own live countdown already occupies
-                    // this same alert slot every second -- sending this
-                    // reminder on top of it just makes the two fight over
-                    // the slot and flicker between messages.
-                    || _timeoutSystem.IsAutoPauseCountdownActive
                     // .resume is tournament-only -- don't hint at a command
                     // that will just get rejected in matchmaking, where every
                     // pause resolves on its own anyway.
@@ -553,51 +549,6 @@ public class MatchManager
             anyoneMissing = true;
 
             if (!disconnectBudgetSystem.IsBudgetExhausted(steamId))
-            {
-                return false;
-            }
-        }
-
-        return anyoneMissing;
-    }
-
-    // True when every roster player currently missing from the server
-    // belongs to a lineup that already used its one-time automatic 2-min
-    // technical pause -- so the match keeps playing shorthanded instead of
-    // falling back to an indefinite "waiting for players" pause once that
-    // one-time budget is spent. Anyone who still wants a pause at that point
-    // has to call .timeout/.tac themselves. False if nobody is missing.
-    public bool AllMissingPlayersLineupsUsedAutoPause()
-    {
-        if (_matchData == null)
-        {
-            return false;
-        }
-
-        HashSet<ulong> connected = new HashSet<ulong>(
-            MatchUtility.Players().Select(player => player.SteamID)
-        );
-
-        bool anyoneMissing = false;
-
-        foreach (
-            MatchMember member in _matchData.lineup_1.lineup_players.Concat(
-                _matchData.lineup_2.lineup_players
-            )
-        )
-        {
-            if (
-                member.steam_id == null
-                || !ulong.TryParse(member.steam_id, out ulong steamId)
-                || connected.Contains(steamId)
-            )
-            {
-                continue;
-            }
-
-            anyoneMissing = true;
-
-            if (!_timeoutSystem.HasUsedAutoPauseForLineup(member.match_lineup_id))
             {
                 return false;
             }
@@ -1439,7 +1390,6 @@ public class MatchManager
         disconnectBudgetSystem.Reset();
         teamEmptyForfeitSystem.Reset();
         warmupShortenSystem.Reset();
-        _timeoutSystem.ResetAutoPause();
     }
 
     private void SetConVar(string name, string value)
