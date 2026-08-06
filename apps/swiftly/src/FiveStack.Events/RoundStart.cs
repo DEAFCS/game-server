@@ -65,11 +65,18 @@ public partial class FiveStackPlugin
 
         int expectedPlayers = _matchService.GetCurrentMatch()?.GetExpectedPlayerCount() ?? 10;
 
-        // Don't keep re-pausing every round for someone who's already
-        // permanently banned -- they can never come back, so the match
-        // should just keep playing shorthanded (e.g. 1v2) instead.
+        // Matchmaking never pauses for a missing player unless their whole
+        // team is empty -- that's TeamEmptyForfeitSystem's own territory,
+        // untouched here. Otherwise the match just keeps playing
+        // shorthanded (e.g. 1v2) from the moment someone leaves; no
+        // automatic pause of any kind in MM. Tournament matches keep the
+        // "wait every round" pause, since an admin/organizer is expected to
+        // actually manage a no-show there.
+        bool isTournamentMatch = matchManager.GetMatchData()?.is_tournament_match == true;
+
         if (
-            currentPlayers < expectedPlayers
+            isTournamentMatch
+            && currentPlayers < expectedPlayers
             && !matchManager.AllMissingPlayersAreBanned()
         )
         {
