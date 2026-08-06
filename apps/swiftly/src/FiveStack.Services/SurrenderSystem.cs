@@ -221,12 +221,25 @@ public class SurrenderSystem
 
         winningLineupId = lineup_id.Value;
 
-        // UpdateMapStatus's winningLineupId parameter is what actually gets
-        // published to the API (PublishMapStatus) -- it defaults to null,
-        // and this call was never passing it. The chat message ("match
-        // forfeited") and this status change both still fired, but the API
-        // received a Surrendered event with no winner, so it had nothing
-        // usable to conclude the match with. The match just kept running.
+        // UpdateMapStatus's winningLineupId parameter publishes a "mapStatus"
+        // game event, which the API only uses to update the match_map row --
+        // MatchMapStatusEvent only runs its match-finishing logic for the
+        // literal status "Finished", never "Surrendered", so this alone never
+        // touches the parent match's own status/winner and never triggers
+        // the API's stop-server/ELO/cleanup cascade (that's all driven off
+        // matches.status, not match_maps.status). The API does have a
+        // dedicated "surrender" game event (-> MatchSurrendered) that sets
+        // matches.status directly to one of its TERMINAL_STATUSES -- publish
+        // that too, since UpdateMapStatus alone was never enough to actually
+        // end the match.
+        _matchEvents.PublishGameEvent(
+            "surrender",
+            new Dictionary<string, object>
+            {
+                { "winning_lineup_id", lineup_id.Value.ToString() },
+            }
+        );
+
         match?.UpdateMapStatus(eMapStatus.Surrendered, lineup_id.Value);
     }
 
