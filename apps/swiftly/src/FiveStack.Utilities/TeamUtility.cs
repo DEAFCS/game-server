@@ -1,3 +1,4 @@
+using System.Linq;
 using FiveStack.Entities;
 using SwiftlyS2.Shared.Players;
 
@@ -171,9 +172,18 @@ namespace FiveStack.Utilities
             return totalCash;
         }
 
+        // Bug: this used to only ever return 0 or 1 (Any() ? 1 : 0), never a
+        // real headcount, and GetInTeam(team) doesn't filter bots -- so a
+        // team that was really empty of real players but bot-filled
+        // (KickBots() sets bot_quota instead of kicking them whenever
+        // ALLOW_BOTS is set) never read as "empty" to
+        // TeamEmptyForfeitSystem, and no pause/forfeit ever kicked in.
+        // MatchUtility.Players() already filters out bots/SourceTV/invalid
+        // controllers, so counting from there is both a real headcount and
+        // bot-safe.
         public static int GetTeamCount(Team team)
         {
-            return MatchUtility.Core.PlayerManager.GetInTeam(team).Any() ? 1 : 0;
+            return MatchUtility.Players().Count(player => player.Controller.Team == team);
         }
     }
 }

@@ -199,13 +199,22 @@ namespace FiveStack.Utilities
             return totalCash;
         }
 
+        // Bug: this used to Count() over MatchUtility.Teams() (the CCSTeam
+        // "team manager" entities -- one per side) instead of players, so it
+        // could only ever return 0 or 1, never a real headcount. Two
+        // consequences: PlayerConnected.cs's stacked-team kick check
+        // (comparing this against expectedTeamCount, e.g. 5) could never
+        // actually trigger, and worse, matchTeam.PlayerControllers includes
+        // bots (KickBots() sets bot_quota instead of kicking them whenever
+        // ALLOW_BOTS is set) -- so a team that was really empty of real
+        // players but bot-filled never read as "empty" to
+        // TeamEmptyForfeitSystem, and no pause/forfeit ever kicked in.
+        // MatchUtility.Players() already filters out bots/SourceTV/invalid
+        // controllers, so counting from there is both a real headcount and
+        // bot-safe.
         public static int GetTeamCount(CsTeam csTeam)
         {
-            return MatchUtility
-                .Teams()
-                .Count(matchTeam =>
-                    matchTeam.PlayerControllers.Count > 0 && matchTeam.TeamNum == (int)csTeam
-                );
+            return MatchUtility.Players().Count(player => player.Team == csTeam);
         }
     }
 }

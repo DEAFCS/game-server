@@ -221,7 +221,13 @@ public class SurrenderSystem
 
         winningLineupId = lineup_id.Value;
 
-        match?.UpdateMapStatus(eMapStatus.Surrendered);
+        // UpdateMapStatus's winningLineupId parameter is what actually gets
+        // published to the API (PublishMapStatus) -- it defaults to null,
+        // and this call was never passing it. The chat message ("match
+        // forfeited") and this status change both still fired, but the API
+        // received a Surrendered event with no winner, so it had nothing
+        // usable to conclude the match with. The match just kept running.
+        match?.UpdateMapStatus(eMapStatus.Surrendered, lineup_id.Value);
     }
 
     public Guid? GetWinningLineupId()

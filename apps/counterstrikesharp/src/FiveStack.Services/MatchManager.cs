@@ -653,7 +653,20 @@ public class MatchManager
 
         _logger.LogInformation($"Setup Match {_matchData.id}");
 
-        _autoCancelCountdownSystem.SetCancelsAt(_matchData.cancels_at);
+        // Bug: SetupMatch re-runs on every API resync (e.g. right after a
+        // connect/disconnect during warmup). Unconditionally restoring the
+        // original, longer matchData.cancels_at here undid whatever
+        // WarmupShortenSystem had already shortened/cleared the live
+        // countdown to -- someone leaving again after everyone had already
+        // connected once would see the old (e.g. "4:30") deadline pop back
+        // up instead of staying on the short window. Once everyone's
+        // connected once, a no-show cancellation can't happen anymore, so
+        // skip re-applying it here and let WarmupShortenSystem keep owning
+        // the display.
+        if (!warmupShortenSystem.HasEveryoneConnectedOnce)
+        {
+            _autoCancelCountdownSystem.SetCancelsAt(_matchData.cancels_at);
+        }
 
         _rankSystem.OnMatchSetup(_matchData);
 

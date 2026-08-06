@@ -49,6 +49,14 @@ public class WarmupShortenSystem
     // countdown again even if someone leaves afterward.
     private bool _everyoneConnectedOnce;
 
+    // Exposed so MatchManager.SetupMatch (re-run on every API resync, e.g.
+    // right after a connect/disconnect) can skip re-applying the original,
+    // longer matchData.cancels_at to the live countdown display once this
+    // is true -- otherwise every resync silently undid the shortened/
+    // cleared countdown this system had already set, popping the old
+    // deadline (e.g. "4:30") back up for someone leaving again later.
+    public bool HasEveryoneConnectedOnce => _everyoneConnectedOnce;
+
     public WarmupShortenSystem(
         ILogger<WarmupShortenSystem> logger,
         GameServer gameServer,
