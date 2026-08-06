@@ -153,20 +153,21 @@ public class SurrenderSystem
         surrenderingVote?.RemovePlayerVote(steamId);
     }
 
-    public void Surrender(CsTeam team)
+    // Reported bug: TeamEmptyForfeitSystem announced "match forfeited" in
+    // chat, then nothing actually happened -- the match kept playing 2v0
+    // for hours with no server-side trace of what went wrong (this used to
+    // silently `return` on a single failed lookup, with only a LogWarning
+    // that's easy to miss). matchData/currentMap/the lineup-side lookup can
+    // all transiently be unavailable for a moment around a status
+    // transition, so retry a few times before giving up -- and if it's
+    // still stuck after that, log at Error so it's actually visible instead
+    // of leaving the match hung indefinitely with no signal anything is
+    // wrong.
+    public void Surrender(CsTeam team, int retriesLeft = 5)
     {
         MatchManager? match = _matchService.GetCurrentMatch();
-        if (match == null)
-        {
-            return;
-        }
-
-        MatchData? matchData = match.GetMatchData();
-        MatchMap? currentMap = match.GetCurrentMap();
-        if (matchData == null || currentMap == null)
-        {
-            return;
-        }
+        MatchData? matchData = match?.GetMatchData();
+        MatchMap? currentMap = match?.GetCurrentMap();
 
         // Side-aware lookup -- lineup.name is the team/clan name (e.g.
         // "Theft's Team"), never literally "CT"/"TERRORIST", so comparing it
@@ -174,27 +175,42 @@ public class SurrenderSystem
         // regardless of which team actually won. GetLineupSide resolves
         // which lineup is currently playing as `team`, accounting for side
         // swaps, same as GetExpectedTeam/GetLineupPlayersForTeam.
-        int roundsPlayed = _gameServer.GetTotalRoundsPlayed();
         Guid? lineup_id = null;
 
-        if (
-            TeamUtility.GetLineupSide(matchData, currentMap, matchData.lineup_1_id, roundsPlayed)
-            == team
-        )
+        if (match != null && matchData != null && currentMap != null)
         {
-            lineup_id = matchData.lineup_1_id;
-        }
-        else if (
-            TeamUtility.GetLineupSide(matchData, currentMap, matchData.lineup_2_id, roundsPlayed)
-            == team
-        )
-        {
-            lineup_id = matchData.lineup_2_id;
+            int roundsPlayed = _gameServer.GetTotalRoundsPlayed();
+
+            if (
+                TeamUtility.GetLineupSide(matchData, currentMap, matchData.lineup_1_id, roundsPlayed)
+                == team
+            )
+            {
+                lineup_id = matchData.lineup_1_id;
+            }
+            else if (
+                TeamUtility.GetLineupSide(matchData, currentMap, matchData.lineup_2_id, roundsPlayed)
+                == team
+            )
+            {
+                lineup_id = matchData.lineup_2_id;
+            }
         }
 
         if (lineup_id == null)
         {
-            _logger.LogWarning($"No lineup id found for {team}");
+            if (retriesLeft > 0)
+            {
+                _logger.LogWarning(
+                    $"Surrender({team}) could not resolve a lineup yet (match={match != null}, matchData={matchData != null}, currentMap={currentMap != null}) -- retrying, {retriesLeft} attempt(s) left"
+                );
+                TimerUtility.AddTimer(1.0f, () => Surrender(team, retriesLeft - 1));
+                return;
+            }
+
+            _logger.LogError(
+                $"Surrender({team}) failed permanently after retries -- match is likely stuck and needs manual intervention (match={match != null}, matchData={matchData != null}, currentMap={currentMap != null})"
+            );
             return;
         }
 
@@ -202,7 +218,7 @@ public class SurrenderSystem
 
         winningLineupId = lineup_id.Value;
 
-        _matchService.GetCurrentMatch()?.UpdateMapStatus(eMapStatus.Surrendered);
+        match?.UpdateMapStatus(eMapStatus.Surrendered);
     }
 
     public Guid? GetWinningLineupId()
