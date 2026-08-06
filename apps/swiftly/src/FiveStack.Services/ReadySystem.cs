@@ -156,6 +156,19 @@ public class ReadySystem
 
     public void UnreadyPlayer(IPlayer player)
     {
+        // Called unconditionally from PlayerDisconnected whenever anyone
+        // leaves during warmup/knife -- a no-op if the ready system was
+        // never actually engaged for this match (matchmaking: Setup() is
+        // only called for tournament matches now, see MatchManager.
+        // StartWarmup). Without this guard, a matchmaking disconnect would
+        // still broadcast "Players Not Ready: ... type .r" and the
+        // per-player "type .r to ready up!" hint even though .r itself is
+        // rejected there.
+        if (!IsWaitingForReady())
+        {
+            return;
+        }
+
         int playerId = player.UserID;
         if (_readyPlayers.ContainsKey(playerId))
         {
