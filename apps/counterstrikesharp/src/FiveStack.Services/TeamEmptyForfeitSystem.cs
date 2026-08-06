@@ -28,6 +28,16 @@ public class TeamEmptyForfeitSystem
     private Timer? _forfeitTimer;
     private List<Timer> _milestoneTimers = new List<Timer>();
 
+    // Exposed so TimeoutSystem can refuse .tac/.timeout while this is
+    // actively holding the server paused for an empty team -- calling CS2's
+    // native timeout_*_start on top of our own mp_pause_match drops our
+    // pause (CS2 won't hold mp_pause_match while its own native tactical
+    // timeout is running), and once the native timeout naturally ends CS2
+    // just resumes play -- but this system's own forfeit countdown was
+    // never cancelled, so the match keeps running against the still-empty
+    // team until the (now pointless) countdown finally fires.
+    public bool IsActivelyPausing => _trackedEmptyTeam != null;
+
     public TeamEmptyForfeitSystem(
         ILogger<TeamEmptyForfeitSystem> logger,
         MatchService matchService,

@@ -93,6 +93,18 @@ public class TimeoutSystem
             return;
         }
 
+        // A completely empty team is TeamEmptyForfeitSystem's exclusive
+        // territory -- calling a technical pause on top of it would drop
+        // its mp_pause_match freeze (CS2 won't hold that while a native
+        // timeout is running) without cancelling its forfeit countdown,
+        // leaving the match playable again against the still-empty team
+        // once the technical pause ends.
+        if (match.teamEmptyForfeitSystem.IsActivelyPausing)
+        {
+            SendTimeoutAlreadyActiveMessage(player);
+            return;
+        }
+
         string pauseMessage = _localizer["timeout.admin_paused"];
 
         if (player != null)
@@ -421,6 +433,16 @@ public class TimeoutSystem
         }
 
         if (IsTimeoutActive())
+        {
+            SendTimeoutAlreadyActiveMessage(player);
+            return;
+        }
+
+        // Same reasoning as RequestPause -- a native tactical timeout on
+        // top of TeamEmptyForfeitSystem's own freeze would drop it without
+        // cancelling the forfeit countdown, letting the match keep playing
+        // against the still-empty team once the timeout ends.
+        if (match.teamEmptyForfeitSystem.IsActivelyPausing)
         {
             SendTimeoutAlreadyActiveMessage(player);
             return;
