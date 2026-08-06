@@ -41,6 +41,15 @@ public class WarmupShortenSystem
 
     private CancellationTokenSource? _timer;
 
+    // Sticky for the rest of the match once true (never reset back to
+    // false except on a full match Reset()). Mirrors the API's own
+    // connected_at check (CancelExpiredMatches' hasNoShow), which is also
+    // permanent per player -- once everyone's touched the server, a
+    // no-show cancellation is no longer a realistic outcome for this
+    // match at all, so there's no reason to ever show that longer
+    // countdown again even if someone leaves afterward.
+    private bool _everyoneConnectedOnce;
+
     public WarmupShortenSystem(
         ILogger<WarmupShortenSystem> logger,
         GameServer gameServer,
@@ -76,9 +85,17 @@ public class WarmupShortenSystem
 
         if (currentPlayers < expectedPlayers)
         {
-            CancelTracking(match, matchData);
+            // Once everyone's touched the server at least once, a no-show
+            // cancellation can't happen for this match anymore -- don't
+            // revive the longer "might get canceled" countdown display for
+            // someone leaving again after that. Just go quiet; the
+            // disconnect-budget/leaver-ban path (not the no-show path)
+            // handles them from here.
+            CancelTracking(match, _everyoneConnectedOnce ? null : matchData);
             return;
         }
+
+        _everyoneConnectedOnce = true;
 
         if (_timer != null)
         {
@@ -129,15 +146,16 @@ public class WarmupShortenSystem
 
         if (wasTracking)
         {
-            // The roster's no longer fully connected (or the match left
-            // warmup) -- the shortened countdown no longer applies, restore
-            // the real no-show deadline on the live clock.
+            // matchData is passed as null once everyone's already connected
+            // once this match -- SetCancelsAt(null) clears the display
+            // entirely instead of restoring the (now moot) no-show deadline.
             match?.autoCancelCountdownSystem.SetCancelsAt(matchData?.cancels_at);
         }
     }
 
     public void Reset()
     {
+        _everyoneConnectedOnce = false;
         CancelTracking(null, null);
     }
 }
