@@ -286,6 +286,21 @@ public class TimeoutSystem
             return;
         }
 
+        // .resume is tournament-only, same as .tech/.pause -- matchmaking
+        // pauses (auto technical pause, waiting-for-players, team-empty)
+        // all resolve on their own (full roster reconnects, budget/timer
+        // elapses); there's no legitimate manual-resume path outside a
+        // tournament's admin-controlled technical pause.
+        if (player != null && matchData.is_tournament_match != true)
+        {
+            _gameServer.Message(
+                HudDestination.Chat,
+                _localizer["timeout.resume_tournament_only", ChatColors.Red],
+                player
+            );
+            return;
+        }
+
         // A completely empty team is TeamEmptyForfeitSystem's exclusive
         // territory -- it runs its own countdown and forfeits automatically.
         // Manual .resume must not be able to force the match to play out

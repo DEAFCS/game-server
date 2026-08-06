@@ -253,6 +253,10 @@ public class MatchManager
                     // reminder on top of it just makes the two fight over
                     // the slot and flicker between messages.
                     || _timeoutSystem.IsAutoPauseCountdownActive
+                    // .resume is tournament-only -- don't hint at a command
+                    // that will just get rejected in matchmaking, where every
+                    // pause resolves on its own anyway.
+                    || _matchData?.is_tournament_match != true
                 )
                 {
                     return;

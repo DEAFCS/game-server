@@ -63,6 +63,7 @@
 
   "timeout.cannot_pause_not_live": " {0}Cannot pause while match is not live",
   "timeout.tech_tournament_only": " {0}Technical timeouts are only available in tournament matches — use .tac instead",
+  "timeout.resume_tournament_only": " {0}.resume is only available in tournament matches — pauses resume on their own",
   "timeout.admin_paused": "Admin Paused the Match",
   "timeout.auto_technical_pause": "Automatic technical pause for {0} (2 min, one-time)",
   "timeout.auto_technical_pause_ended": "Technical pause ended — resuming",

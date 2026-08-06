@@ -38,13 +38,20 @@ public partial class FiveStackPlugin
 
         context.Reply(_localizer["help.forfeit_vote", CommandUtility.PublicChatTrigger]);
 
-        context.Reply(
-            _localizer[
-                "help.tech_pause",
-                CommandUtility.PublicChatTrigger,
-                CommandUtility.PublicChatTrigger
-            ]
-        );
+        // .tech/.resume are tournament-only -- don't list a command that
+        // will just get rejected in matchmaking.
+        bool isTournamentMatch =
+            _matchService.GetCurrentMatch()?.GetMatchData()?.is_tournament_match == true;
+        if (isTournamentMatch)
+        {
+            context.Reply(
+                _localizer[
+                    "help.tech_pause",
+                    CommandUtility.PublicChatTrigger,
+                    CommandUtility.PublicChatTrigger
+                ]
+            );
+        }
 
         context.Reply(_localizer["help.rules", CommandUtility.PublicChatTrigger]);
 
