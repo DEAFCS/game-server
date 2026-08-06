@@ -4,6 +4,7 @@ using FiveStack.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SwiftlyS2.Shared;
+using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.Players;
 using SwiftlyS2.Shared.SchemaDefinitions;
 using SwiftlyS2.Shared.Translation;
@@ -220,6 +221,24 @@ public class SurrenderSystem
         _logger.LogInformation($"Surrendering ${team}:{lineup_id.Value}");
 
         winningLineupId = lineup_id.Value;
+
+        // Nothing up to this point tells the CS2 engine itself that
+        // anything happened -- only our own internal status flag and the
+        // API's database changed. The live round (and, since the match was
+        // never natively "clinched", every round after it) just kept
+        // playing out as normal until the server was eventually torn down
+        // minutes later (tv_delay after the match already concluded
+        // API-side) -- reported bug: ".gg says forfeit completed, but the
+        // match keeps playing for a couple more minutes." Force CS2's own
+        // native surrender round-end (real "CTs/Terrorists Surrender"
+        // banner, not just our chat message) and freeze the server the same
+        // way TeamEmptyForfeitSystem already does, so nothing else is
+        // playable while everything else winds down.
+        Team losingTeam = TeamUtility.OppositeTeam(team);
+        RoundEndReason surrenderReason =
+            losingTeam == Team.CT ? RoundEndReason.CTsSurrender : RoundEndReason.TerroristsSurrender;
+        MatchUtility.Rules()?.TerminateRound(surrenderReason, 3.0f);
+        match?.PauseMatch("Match surrendered", true);
 
         // UpdateMapStatus's winningLineupId parameter publishes a "mapStatus"
         // game event, which the API only uses to update the match_map row --
