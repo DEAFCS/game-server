@@ -169,13 +169,22 @@ public class DisconnectBudgetSystem
         );
     }
 
-    // Players asked not to see these mid-round, only right before a round
-    // starts -- but a message that's due mid-round must still reach them, so
-    // it's queued instead of dropped, and sent as soon as freeze period
-    // starts (see FlushPendingAnnouncements).
+    // Players asked not to see these mid-round (during an actual live
+    // round), only right before a round starts -- but a message that's due
+    // mid-round must still reach them, so it's queued instead of dropped,
+    // and sent as soon as freeze period starts (see
+    // FlushPendingAnnouncements). That "don't interrupt" concern only
+    // applies once a round is actually being played, though -- during
+    // warmup/knife/the stay-switch decision window there's no round in
+    // progress to interrupt, so send immediately there instead of waiting
+    // for (or queueing to) a freeze period that may not even happen again
+    // for up to a minute.
     private void SendOrQueue(string message)
     {
-        if (MatchUtility.Rules()?.FreezePeriod ?? false)
+        MatchManager? match = _matchService.GetCurrentMatch();
+        bool isLiveRound = match?.IsInPlay() == true;
+
+        if (!isLiveRound || (MatchUtility.Rules()?.FreezePeriod ?? false))
         {
             _gameServer.Message(MessageType.Chat, message);
             return;
