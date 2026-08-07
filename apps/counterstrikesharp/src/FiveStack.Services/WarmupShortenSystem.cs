@@ -87,27 +87,31 @@ public class WarmupShortenSystem
             return;
         }
 
+        // One-shot: once the full roster has connected together at least
+        // once, the shortened countdown to knife round has already been
+        // started (or has already elapsed) exactly once. A player leaving
+        // and reconnecting again mid-warmup after that must NOT pause,
+        // cancel, or restart that countdown -- it used to (via
+        // CancelTracking below re-arming on the next full-roster event),
+        // which is exactly why the live warmup clock appeared to "go back
+        // up" every time someone reconnected instead of just counting down
+        // to 1 minute once and staying there. TeamEmptyForfeitSystem takes
+        // over pausing for an empty team once play/knife actually starts,
+        // so there's nothing left for this system to do here.
+        if (_everyoneConnectedOnce)
+        {
+            return;
+        }
+
         int currentPlayers = MatchUtility.Players().Count;
         int expectedPlayers = match.GetExpectedPlayerCount();
 
         if (currentPlayers < expectedPlayers)
         {
-            // Once everyone's touched the server at least once, a no-show
-            // cancellation can't happen for this match anymore -- don't
-            // revive the longer "might get canceled" countdown display for
-            // someone leaving again after that. Just go quiet; the
-            // disconnect-budget/leaver-ban path (not the no-show path)
-            // handles them from here.
-            CancelTracking(match, _everyoneConnectedOnce ? null : matchData);
             return;
         }
 
         _everyoneConnectedOnce = true;
-
-        if (_timer != null)
-        {
-            return;
-        }
 
         _logger.LogInformation(
             $"All {expectedPlayers} players connected during warmup -- starting {ShortenedWarmupSeconds}s countdown to knife round"
