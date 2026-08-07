@@ -169,22 +169,20 @@ public class DisconnectBudgetSystem
         );
     }
 
-    // Players asked not to see these mid-round (during an actual live
-    // round), only right before a round starts -- but a message that's due
-    // mid-round must still reach them, so it's queued instead of dropped,
-    // and sent as soon as freeze period starts (see
-    // FlushPendingAnnouncements). That "don't interrupt" concern only
-    // applies once a round is actually being played, though -- during
-    // warmup/knife/the stay-switch decision window there's no round in
-    // progress to interrupt, so send immediately there instead of waiting
-    // for (or queueing to) a freeze period that may not even happen again
-    // for up to a minute.
+    // Players asked not to see these mid-round -- only during warmup, or
+    // right before a round starts (freeze period). Everything else (an
+    // active knife round being fought, or a live round) still queues and
+    // waits for the next freeze period instead of interrupting. Note
+    // IsWarmup() also reads true during the post-knife stay/switch decision
+    // window (KnifeSystem re-enables CS2's native WarmupPeriod flag there
+    // to avoid freezing the game) -- that's intentional here, it's the same
+    // "nothing to interrupt" waiting state as regular warmup.
     private void SendOrQueue(string message)
     {
         MatchManager? match = _matchService.GetCurrentMatch();
-        bool isLiveRound = match?.IsInPlay() == true;
+        bool isWarmup = match?.IsWarmup() == true;
 
-        if (!isLiveRound || (MatchUtility.Rules()?.FreezePeriod ?? false))
+        if (isWarmup || (MatchUtility.Rules()?.FreezePeriod ?? false))
         {
             _gameServer.Message(HudDestination.Chat, message);
             return;
