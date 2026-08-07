@@ -448,6 +448,19 @@ public class TimeoutSystem
             return;
         }
 
+        // IsTimeoutActive() only sees CS2's own native tactical-timeout
+        // flags, not our own mp_pause_match-based technical pause (.tech,
+        // tournament-only) -- match.IsPaused() reflects that instead.
+        // Without this, .tac/.timeout slipped straight through while a
+        // .tech pause was already active in a tournament match (MM never
+        // hit this, since .tech doesn't exist there -- the only way MM
+        // gets paused is TeamEmptyForfeitSystem, already checked above).
+        if (match.IsPaused())
+        {
+            SendTimeoutAlreadyActiveMessage(player);
+            return;
+        }
+
         if (player != null)
         {
             if (!CanCallTacticalTimeout(player))
