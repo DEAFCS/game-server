@@ -56,10 +56,10 @@ public class TeamEmptyForfeitSystem
     public void Check()
     {
         MatchManager? match = _matchService.GetCurrentMatch();
-        if (match == null || !match.IsInPlayOrKnife())
+        if (match == null || !match.IsKnifeOrLiveStatus())
         {
             _logger.LogInformation(
-                $"Check: skipping, match={match != null} isInPlayOrKnife={match?.IsInPlayOrKnife()}"
+                $"Check: skipping, match={match != null} isKnifeOrLiveStatus={match?.IsKnifeOrLiveStatus()}"
             );
             CancelTracking();
             return;

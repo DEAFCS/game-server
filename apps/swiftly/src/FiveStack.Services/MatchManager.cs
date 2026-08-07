@@ -177,6 +177,23 @@ public class MatchManager
         return IsKnife() || IsInPlay();
     }
 
+    // Status-only variant for TeamEmptyForfeitSystem specifically --
+    // IsInPlayOrKnife() (via IsInPlay() -> IsWarmup()) falls back to CS2's
+    // native WarmupPeriod engine flag, which lags a tick or more behind
+    // _currentMapStatus right as a map status transition happens (e.g.
+    // Knife -> Live when a knife decision finalizes). TeamEmptyForfeitSystem
+    // needs to react to that transition immediately: Check() treats
+    // "not in play or knife" as "stop tracking any empty team", so that lag
+    // was making it briefly, wrongly conclude the match wasn't in a
+    // trackable state at the exact moment a team's empty-pause needed to
+    // survive the transition, silently dropping it.
+    public bool IsKnifeOrLiveStatus()
+    {
+        return _currentMapStatus == eMapStatus.Knife
+            || _currentMapStatus == eMapStatus.Live
+            || _currentMapStatus == eMapStatus.Overtime;
+    }
+
     public bool IsPaused()
     {
         if (_currentMapStatus == eMapStatus.Paused)
