@@ -45,7 +45,12 @@ public partial class FiveStackPlugin
 
         context.Reply(_localizer["help.tac_timeout", CommandUtility.SilentChatTrigger]);
 
-        context.Reply(_localizer["help.forfeit_vote", CommandUtility.PublicChatTrigger]);
+        // .gg is MM-only -- tournament matches rely on an admin/organizer
+        // instead of a player-triggered forfeit vote.
+        if (!isTournamentMatch)
+        {
+            context.Reply(_localizer["help.forfeit_vote", CommandUtility.PublicChatTrigger]);
+        }
 
         if (isTournamentMatch)
         {

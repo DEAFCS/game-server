@@ -537,49 +537,6 @@ public class MatchManager
         _gameServer.SendCommands(["mp_team_timeout_time 30", "mp_team_timeout_max 4"]);
     }
 
-    // True when every roster player currently missing from the server
-    // already has an exhausted disconnect budget (permanently banned for
-    // this match) -- so the match can keep playing shorthanded instead of
-    // pausing every round for someone who can never come back. False if
-    // nobody is missing at all (nothing to skip a pause for).
-    public bool AllMissingPlayersAreBanned()
-    {
-        if (_matchData == null)
-        {
-            return false;
-        }
-
-        HashSet<ulong> connected = new HashSet<ulong>(
-            MatchUtility.Players().Select(player => player.SteamID)
-        );
-
-        bool anyoneMissing = false;
-
-        foreach (
-            MatchMember member in _matchData.lineup_1.lineup_players.Concat(
-                _matchData.lineup_2.lineup_players
-            )
-        )
-        {
-            if (
-                member.steam_id == null
-                || !ulong.TryParse(member.steam_id, out ulong steamId)
-                || connected.Contains(steamId)
-            )
-            {
-                continue;
-            }
-
-            anyoneMissing = true;
-
-            if (!disconnectBudgetSystem.IsBudgetExhausted(steamId))
-            {
-                return false;
-            }
-        }
-
-        return anyoneMissing;
-    }
 
     // Anyone who left during warmup and never came back never triggered
     // DisconnectBudgetSystem.OnPlayerDisconnected -- that only fires on the

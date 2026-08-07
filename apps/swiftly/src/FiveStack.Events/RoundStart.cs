@@ -61,27 +61,12 @@ public partial class FiveStackPlugin
         // dropped.
         matchManager.disconnectBudgetSystem.FlushPendingAnnouncements();
 
-        int currentPlayers = MatchUtility.PlayerCount();
-
-        int expectedPlayers = _matchService.GetCurrentMatch()?.GetExpectedPlayerCount() ?? 10;
-
-        // Matchmaking never pauses for a missing player unless their whole
-        // team is empty -- that's TeamEmptyForfeitSystem's own territory,
-        // untouched here. Otherwise the match just keeps playing
-        // shorthanded (e.g. 1v2) from the moment someone leaves; no
-        // automatic pause of any kind in MM. Tournament matches keep the
-        // "wait every round" pause, since an admin/organizer is expected to
-        // actually manage a no-show there.
-        bool isTournamentMatch = matchManager.GetMatchData()?.is_tournament_match == true;
-
-        if (
-            isTournamentMatch
-            && currentPlayers < expectedPlayers
-            && !matchManager.AllMissingPlayersAreBanned()
-        )
-        {
-            matchManager.PauseMatch("Waiting for players to reconnect");
-        }
+        // No automatic pause here anymore, MM or tournament -- a missing
+        // player short of their whole team being empty (TeamEmptyForfeitSystem's
+        // own territory, untouched here) just keeps the match playing
+        // shorthanded (e.g. 1v2). Tournament used to keep a "wait every
+        // round" pause for this, but that's now on the captain/admin to
+        // call manually via .tech/.pause instead, same as MM.
 
         return HookResult.Continue;
     }

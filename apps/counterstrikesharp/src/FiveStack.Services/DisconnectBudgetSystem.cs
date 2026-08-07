@@ -162,6 +162,13 @@ public class DisconnectBudgetSystem
 
     private void AnnounceMilestone(string playerName, int secondsRemaining)
     {
+        // MM-only -- the budget itself (and the eventual ban) still applies
+        // in tournament, just without this periodic reminder broadcast.
+        if (_matchService.GetCurrentMatch()?.GetMatchData()?.is_tournament_match == true)
+        {
+            return;
+        }
+
         int minutesRemaining = secondsRemaining / 60;
         SendOrQueue(
             $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}"

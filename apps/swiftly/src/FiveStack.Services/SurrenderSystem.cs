@@ -61,6 +61,18 @@ public class SurrenderSystem
             return;
         }
 
+        // MM-only -- tournament matches have an admin/organizer expected to
+        // resolve a no-show manually instead of a player-triggered vote.
+        if (match.GetMatchData()?.is_tournament_match == true)
+        {
+            _gameServer.Message(
+                MessageType.Chat,
+                _localizer["forfeit.disabled_tournament", ChatColors.Red],
+                player
+            );
+            return;
+        }
+
         int expectedTeamCount = match.GetExpectedPlayerCount() / 2;
 
         // A "short" team in Duel (1v1) would have 0 players on it -- nobody
