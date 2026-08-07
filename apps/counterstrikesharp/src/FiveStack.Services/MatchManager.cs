@@ -1036,7 +1036,18 @@ public class MatchManager
 
             Server.NextFrame(() =>
             {
-                ResumeMatch(null, true);
+                // Don't blindly resume here -- this used to unconditionally
+                // clear ANY existing pause the moment the match went live,
+                // including TeamEmptyForfeitSystem's pause for a team that's
+                // still empty (e.g. the winning captain locked in a knife
+                // decision while the other side had no players connected).
+                // That silently undid the pause right as the round actually
+                // went live, which is exactly the 1v0-style bug this is
+                // guarding against.
+                if (!teamEmptyForfeitSystem.IsActivelyPausing)
+                {
+                    ResumeMatch(null, true);
+                }
 
                 if (IsWarmup() || IsKnife())
                 {

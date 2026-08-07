@@ -57,7 +57,6 @@
 
   "auto_cancel.missing_players_warning": "{1} - {0} min left to join before the match is canceled",
 
-  "team_empty.forfeit_warning": "A team has no players — match forfeits in {0} min if nobody returns",
   "team_empty.forfeited": "Match forfeited — a team had no players remaining",
 
   "forfeit.not_live": " {0}Cannot call .gg while the match is not live",

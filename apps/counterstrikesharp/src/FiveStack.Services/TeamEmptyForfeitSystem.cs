@@ -16,7 +16,6 @@ namespace FiveStack;
 public class TeamEmptyForfeitSystem
 {
     private const int ForfeitSeconds = 5 * 60;
-    private static readonly int[] MilestoneSeconds = { 5 * 60, 3 * 60, 60 };
 
     private readonly MatchService _matchService;
     private readonly GameServer _gameServer;
@@ -26,7 +25,6 @@ public class TeamEmptyForfeitSystem
 
     private CsTeam? _trackedEmptyTeam;
     private Timer? _forfeitTimer;
-    private List<Timer> _milestoneTimers = new List<Timer>();
 
     // Exposed so TimeoutSystem can refuse .tac/.timeout while this is
     // actively holding the server paused for an empty team -- calling CS2's
@@ -121,18 +119,6 @@ public class TeamEmptyForfeitSystem
         match.PauseMatch($"{emptyTeam} has no players connected", true);
 
         _forfeitTimer = TimerUtility.AddTimer(ForfeitSeconds, () => Forfeit(winningTeam));
-
-        foreach (int milestone in MilestoneSeconds)
-        {
-            float delay = ForfeitSeconds - milestone;
-            if (delay <= 0)
-            {
-                AnnounceMilestone(milestone);
-                continue;
-            }
-
-            _milestoneTimers.Add(TimerUtility.AddTimer(delay, () => AnnounceMilestone(milestone)));
-        }
     }
 
     private bool IsRosterFullyBanned(MatchManager match, CsTeam emptyTeam)
@@ -148,16 +134,6 @@ public class TeamEmptyForfeitSystem
             member.steam_id != null
             && ulong.TryParse(member.steam_id, out ulong steamId)
             && match.disconnectBudgetSystem.IsBudgetExhausted(steamId)
-        );
-    }
-
-    private void AnnounceMilestone(int secondsRemaining)
-    {
-        int minutesRemaining = secondsRemaining / 60;
-        _gameServer.Message(
-            HudDestination.Chat,
-            $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}"
-                + _localizer["team_empty.forfeit_warning", minutesRemaining]
         );
     }
 
@@ -178,12 +154,6 @@ public class TeamEmptyForfeitSystem
 
         _forfeitTimer?.Kill();
         _forfeitTimer = null;
-
-        foreach (var timer in _milestoneTimers)
-        {
-            timer?.Kill();
-        }
-        _milestoneTimers.Clear();
 
         if (wasTracking && resumeMatch != null)
         {
