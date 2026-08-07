@@ -454,8 +454,15 @@ public class MatchManager
         _matchEvents.PublishMapStatus(status, winningLineupId);
         _currentMapStatus = status;
 
-        if (status == eMapStatus.Knife)
+        if (status == eMapStatus.Knife || status == eMapStatus.Live)
         {
+            // Also re-run at Live, not just Knife -- a captain can lock in
+            // stay/switch (or the decision can auto-timeout) while the
+            // opposing team is still empty, and CS2's own live-match-start
+            // processing (cfg exec, mp_restartgame) can silently drop an
+            // earlier mp_pause_match. Re-checking here re-pauses if the
+            // team is still empty, right after that processing has run,
+            // instead of relying on the single earlier pause to survive it.
             SyncDisconnectBudgetForMissingPlayers();
         }
     }

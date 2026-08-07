@@ -42,7 +42,6 @@
   "knife.captain_picking": "{0} - Captain is Picking Sides!",
   "knife.captain_prompt": "As the captain you must select to {0}{1}stay {2} or {3}{4}switch",
   "knife.not_captain": " {0}You are not the captain!",
-  "knife.decision_blocked_team_empty": " {0}Match is paused — waiting for the opposing team to reconnect",
   "knife.captain_picked_stay": "captain picked to {0}stay {1}sides",
   "knife.captain_picked_swap": "captain picked to {0}swap {1}sides",
   "knife.timeout_stay": "No side selected in time — {0}staying {1}sides",

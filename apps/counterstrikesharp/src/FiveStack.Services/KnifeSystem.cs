@@ -201,21 +201,6 @@ public class KnifeSystem
             return;
         }
 
-        // TeamEmptyForfeitSystem is holding the match paused for an empty
-        // team -- finalizing to Live here would resume play with the
-        // opposing team still not connected (the same 1v0-style bug this
-        // guard exists to prevent, just reached through the knife decision
-        // instead of a technical timeout).
-        if (match.teamEmptyForfeitSystem.IsActivelyPausing)
-        {
-            _gameServer.Message(
-                HudDestination.Chat,
-                _localizer["knife.decision_blocked_team_empty", ChatColors.Red],
-                player
-            );
-            return;
-        }
-
         if (match.captainSystem.IsCaptain(player, winningTeam) == false)
         {
             _gameServer.Message(
@@ -233,6 +218,12 @@ public class KnifeSystem
             _localizer["knife.captain_picked_stay", ChatColors.Red, ChatColors.Default]
         );
 
+        // Deliberately not gated on TeamEmptyForfeitSystem here -- the
+        // captain who's present gets to lock in stay/switch whenever they
+        // want, even while the opposing team is empty. UpdateMapStatus
+        // below re-syncs the empty-team check right as the map flips to
+        // Live and re-pauses if needed, instead of blocking the decision
+        // itself.
         match.UpdateMapStatus(eMapStatus.Live);
     }
 
@@ -243,16 +234,6 @@ public class KnifeSystem
 
         if (match == null || winningTeam == CsTeam.None || !match.IsKnife())
         {
-            return;
-        }
-
-        if (match.teamEmptyForfeitSystem.IsActivelyPausing)
-        {
-            _gameServer.Message(
-                HudDestination.Chat,
-                _localizer["knife.decision_blocked_team_empty", ChatColors.Red],
-                player
-            );
             return;
         }
 
@@ -409,18 +390,6 @@ public class KnifeSystem
 
         if (match == null || winningTeam == CsTeam.None || !match.IsKnife())
         {
-            return;
-        }
-
-        // Don't finalize while the match is paused for an empty team --
-        // requeue the same timeout instead, so it keeps retrying every
-        // KNIFE_DECISION_TIMEOUT_SECONDS until the pause lifts.
-        if (match.teamEmptyForfeitSystem.IsActivelyPausing)
-        {
-            _knifeTimeoutTimer = TimerUtility.AddTimer(
-                KNIFE_DECISION_TIMEOUT_SECONDS,
-                HandleDecisionTimeout
-            );
             return;
         }
 

@@ -87,7 +87,15 @@ public class TeamEmptyForfeitSystem
     {
         if (_trackedEmptyTeam == emptyTeam)
         {
-            _logger.LogInformation($"HandleEmptyTeam({emptyTeam}): already tracking, skipping");
+            // Already tracking this team as empty -- the forfeit clock and
+            // milestones are already running, don't restart them. Still
+            // re-send the pause itself, though (harmless if already
+            // paused): CS2's own live-match-start processing (cfg exec,
+            // mp_restartgame, run when a knife decision finalizes) can
+            // silently drop an earlier mp_pause_match, and this is what
+            // actually keeps the match held once that happens.
+            _logger.LogInformation($"HandleEmptyTeam({emptyTeam}): already tracking, re-affirming pause");
+            match.PauseMatch($"{emptyTeam} has no players connected", true);
             return;
         }
 
