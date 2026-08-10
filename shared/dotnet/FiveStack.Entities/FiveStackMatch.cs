@@ -5,6 +5,12 @@ public class MatchData
     public Guid id { get; set; } = Guid.Empty;
     public bool is_lan { get; set; } = false;
     public bool is_tournament_match { get; set; } = false;
+
+    // Draft/pickup lobby (Open Match / AUTO-SPLIT) match -- see
+    // is_draft_match.sql on the API side. Used to extend tournament-only
+    // features (.tech technical pause) to draft matches too, while MM
+    // stays excluded.
+    public bool is_draft_match { get; set; } = false;
     public string password { get; set; } = "connectme";
 
     public Guid? current_match_map_id { get; set; } = Guid.Empty;

@@ -73,11 +73,11 @@ public class TimeoutSystem
             return;
         }
 
-        // Technical timeout (.tech/.pause) is tournament-only -- matchmaking
-        // and other custom matches can still call a tactical timeout
-        // (.tac), just not this one. Console/RCON (player == null) is left
-        // alone; this only gates the player-typed chat command.
-        if (player != null && match.GetMatchData()?.is_tournament_match != true)
+        // Technical timeout (.tech/.pause) is tournament/draft-only --
+        // matchmaking can still call a tactical timeout (.tac), just not
+        // this one. Console/RCON (player == null) is left alone; this only
+        // gates the player-typed chat command.
+        if (player != null && !IsTechAllowed(match.GetMatchData()))
         {
             _gameServer.Message(
                 MessageType.Chat,
@@ -255,6 +255,14 @@ public class TimeoutSystem
         return true;
     }
 
+    // .tech/.pause and .resume are available in tournament and draft
+    // matches, not MM.
+    private static bool IsTechAllowed(MatchData? matchData)
+    {
+        return matchData != null
+            && (matchData.is_tournament_match || matchData.is_draft_match);
+    }
+
     private void CannotPauseMessage(IPlayer? player, string type)
     {
         _gameServer.Message(
@@ -274,12 +282,12 @@ public class TimeoutSystem
             return;
         }
 
-        // .resume is tournament-only, same as .tech/.pause -- matchmaking
-        // pauses (auto technical pause, waiting-for-players, team-empty)
-        // all resolve on their own (full roster reconnects, budget/timer
-        // elapses); there's no legitimate manual-resume path outside a
-        // tournament's admin-controlled technical pause.
-        if (player != null && matchData.is_tournament_match != true)
+        // .resume is tournament/draft-only, same as .tech/.pause --
+        // matchmaking pauses (auto technical pause, waiting-for-players,
+        // team-empty) all resolve on their own (full roster reconnects,
+        // budget/timer elapses); there's no legitimate manual-resume path
+        // outside a tournament/draft's admin-controlled technical pause.
+        if (player != null && !IsTechAllowed(matchData))
         {
             _gameServer.Message(
                 MessageType.Chat,
