@@ -63,6 +63,7 @@
   "forfeit.disabled_duel": " {0}.gg is disabled in 1v1 — a missing opponent is forfeited automatically instead",
   "forfeit.not_short": " {0}.gg is only available when your team is short a player",
   "forfeit.disabled_tournament": " {0}.gg is disabled in tournament matches — contact an admin/organizer instead",
+  "forfeit.waiting_for_reconnect": " {0}Your missing teammate still has time to reconnect — .gg isn't available yet",
 
   "timeout.cannot_pause_not_live": " {0}Cannot pause while match is not live",
   "timeout.tech_tournament_only": " {0}Technical timeouts are only available in tournament matches — use .tac instead",

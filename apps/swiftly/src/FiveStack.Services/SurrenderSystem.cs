@@ -104,6 +104,44 @@ public class SurrenderSystem
             return;
         }
 
+        // .gg is the deliberate "they're confirmed gone" call, not a panic
+        // button for a normal disconnect -- the missing player still has up
+        // to 5 minutes to reconnect (DisconnectBudgetSystem) before this is
+        // even offered. Same "gone for good" signal TeamEmptyForfeitSystem
+        // already uses to skip a pointless countdown for an already-banned
+        // roster.
+        List<MatchMember> roster = match.GetLineupPlayersForTeam(team);
+        HashSet<ulong> connectedSteamIds = new HashSet<ulong>(
+            MatchUtility.Players().Where(p => p.Controller.Team == team).Select(p => p.SteamID)
+        );
+
+        List<ulong> missingSteamIds = new List<ulong>();
+        foreach (MatchMember member in roster)
+        {
+            if (
+                member.steam_id != null
+                && ulong.TryParse(member.steam_id, out ulong steamId)
+                && !connectedSteamIds.Contains(steamId)
+            )
+            {
+                missingSteamIds.Add(steamId);
+            }
+        }
+
+        bool allMissingConfirmedGone =
+            missingSteamIds.Count > 0
+            && missingSteamIds.All(steamId => match.disconnectBudgetSystem.IsBudgetExhausted(steamId));
+
+        if (!allMissingConfirmedGone)
+        {
+            _gameServer.Message(
+                MessageType.Chat,
+                _localizer["forfeit.waiting_for_reconnect", ChatColors.Red],
+                player
+            );
+            return;
+        }
+
         if (surrenderingVote != null && surrenderingVote.IsVoteActive())
         {
             surrenderingVote.CastVote(player, true);
