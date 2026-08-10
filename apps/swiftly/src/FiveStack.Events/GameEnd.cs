@@ -59,7 +59,20 @@ public partial class FiveStackPlugin
             return HookResult.Continue;
         }
 
-        Guid? winningLineupId = _matchEvents.GetWinningLineupId();
+        // A surrender (.gg, or an admin/organizer forfeit) already decided
+        // the winner -- CS2's own native win-panel event still fires right
+        // after (TerminateRound ends the current round), and
+        // MatchEvents.GetWinningLineupId() would score that off the raw
+        // round tally instead, which is exactly backwards for a forfeit:
+        // the short-handed team can easily still be ahead on rounds at the
+        // moment they give up. Reported bug: a team leading 5-4 surrendered
+        // (short a player, leaver-banned teammate) and still ended up
+        // recorded as the winner, because this WaitingForTV transition
+        // published the round-tally winner over the correct surrender one
+        // moments after Surrender() had already published it correctly.
+        Guid? winningLineupId = match.isSurrendered()
+            ? _surrenderSystem.GetWinningLineupId()
+            : _matchEvents.GetWinningLineupId();
 
         _logger.LogInformation(
             "OnGameEnd: dispatching end-of-map (use_playcast={UsePlaycast} tv_delay={TvDelay} winningLineupId={WinningLineupId})",
