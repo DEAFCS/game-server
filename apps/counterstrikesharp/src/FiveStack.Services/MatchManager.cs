@@ -488,24 +488,29 @@ public class MatchManager
         _matchEvents.PublishMapStatus(status, winningLineupId);
         _currentMapStatus = status;
 
-        if (status == eMapStatus.Warmup && _matchData.is_tournament_match)
+        if (status == eMapStatus.Warmup)
         {
-            // Bug: map 2+ of a tournament BO2/BO3 series showed the
-            // warmup countdown with the wrong (much longer) deadline --
-            // the "hung live match" safety timeout left over from the
-            // previous map's Live phase, instead of the actual short
-            // no-show deadline (Auto Cancel Duration). Root cause: the
-            // matchData fetch that kicks off this map's ChangeMap happens
-            // *before* this map's Warmup status is even published (a few
-            // lines up), so the API's own reset of matches.cancels_at
-            // (tbu_match_maps' Warmup branch) hasn't happened yet -- the
-            // stale value gets baked into _matchData and nothing
-            // refreshes it afterwards for tournament matches specifically.
-            // (Draft/MM don't have this bug because WarmupShortenSystem,
-            // tournament-only-excluded, re-derives its own fresh local
-            // countdown once everyone's already connected -- see
-            // StartWarmup().) Re-fetch shortly after publishing, once the
-            // API has actually committed the corrected cancels_at.
+            // Bug: a map's warmup countdown could briefly (or, for
+            // tournament map 2+, persistently) show the wrong (much
+            // longer) deadline -- the "hung live match" safety timeout
+            // left over from a previous Live phase, instead of the
+            // actual short no-show deadline (Auto Cancel Duration).
+            // Root cause: the matchData fetch that kicks off this map's
+            // ChangeMap happens *before* this map's Warmup status is
+            // even published (a few lines up), so the API's own reset
+            // of matches.cancels_at (tbu_match_maps' Warmup branch)
+            // hasn't happened yet -- the stale value gets baked into
+            // _matchData and nothing refreshes it afterwards.
+            // Originally only re-fetched for tournament matches, on the
+            // assumption WarmupShortenSystem (tournament-excluded)
+            // already covered draft/MM by re-deriving its own fresh
+            // local countdown once everyone's connected -- but that
+            // only fixes it retroactively once the full roster is in,
+            // not the wrong value shown up to that point (reported
+            // live: "~160 min" briefly visible in a draft lobby before
+            // it "jumped" to the real ~1min countdown). Re-fetch for
+            // every match type, once the API has actually committed the
+            // corrected cancels_at.
             TimerUtility.AddTimer(1.0f, () => _matchService.GetMatchFromApi());
         }
 
