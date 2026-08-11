@@ -465,6 +465,27 @@ public class MatchManager
         _matchEvents.PublishMapStatus(status, winningLineupId);
         _currentMapStatus = status;
 
+        if (status == eMapStatus.Warmup && _matchData.is_tournament_match)
+        {
+            // Bug: map 2+ of a tournament BO2/BO3 series showed the
+            // warmup countdown with the wrong (much longer) deadline --
+            // the "hung live match" safety timeout left over from the
+            // previous map's Live phase, instead of the actual short
+            // no-show deadline (Auto Cancel Duration). Root cause: the
+            // matchData fetch that kicks off this map's ChangeMap happens
+            // *before* this map's Warmup status is even published (a few
+            // lines up), so the API's own reset of matches.cancels_at
+            // (tbu_match_maps' Warmup branch) hasn't happened yet -- the
+            // stale value gets baked into _matchData and nothing
+            // refreshes it afterwards for tournament matches specifically.
+            // (Draft/MM don't have this bug because WarmupShortenSystem,
+            // tournament-only-excluded, re-derives its own fresh local
+            // countdown once everyone's already connected -- see
+            // StartWarmup().) Re-fetch shortly after publishing, once the
+            // API has actually committed the corrected cancels_at.
+            TimerUtility.AddTimer(1.0f, () => _matchService.GetMatchFromApi());
+        }
+
         if (status == eMapStatus.Knife || status == eMapStatus.Live)
         {
             // Also re-run at Live, not just Knife -- a captain can lock in
