@@ -74,6 +74,8 @@ public partial class FiveStackPlugin
             ? _surrenderSystem.GetWinningLineupId()
             : _matchEvents.GetWinningLineupId();
 
+        match.AnnounceSeriesProgress(winningLineupId);
+
         _logger.LogInformation(
             "OnGameEnd: dispatching end-of-map (use_playcast={UsePlaycast} tv_delay={TvDelay} winningLineupId={WinningLineupId})",
             matchData.options.use_playcast,

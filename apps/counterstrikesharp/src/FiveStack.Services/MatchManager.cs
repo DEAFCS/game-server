@@ -60,6 +60,16 @@ public class MatchManager
     private int _remainingMapChangeDelay = 0;
     public Timer? _mapChangeCountdownTimer;
 
+    // Map wins per lineup across the whole series -- NOT cleared by
+    // Reset() (that only resets per-map subsystems; a single MatchManager
+    // instance already lives for the entire BO3/BO5 series, only replaced
+    // when a genuinely new match comes in from the API -- see
+    // MatchService.GetMatchFromApi). Used by AnnounceSeriesProgress to
+    // tell whether a just-finished map decided the series or another map
+    // is still coming.
+    private int _lineup1MapWins = 0;
+    private int _lineup2MapWins = 0;
+
     public MatchManager(
         ILogger<MatchManager> logger,
         MatchEvents matchEvents,
@@ -510,6 +520,46 @@ public class MatchManager
             // instead of relying on the single earlier pause to survive it.
             SyncDisconnectBudgetForMissingPlayers();
         }
+    }
+
+    // Called once per finished map (from OnGameEnd, right after the map's
+    // winner is resolved) to tell players what happens next: either the
+    // series is over and stats will be up shortly, or another map is
+    // coming and they should stay connected. A best-of-1 match is always
+    // "decided" by its only map; a BO3/BO5 series only counts as decided
+    // once one side has won a majority of maps (2 of 3, 3 of 5).
+    public void AnnounceSeriesProgress(Guid? winningLineupId)
+    {
+        if (_matchData == null || winningLineupId == null)
+        {
+            return;
+        }
+
+        if (winningLineupId == _matchData.lineup_1_id)
+        {
+            _lineup1MapWins++;
+        }
+        else if (winningLineupId == _matchData.lineup_2_id)
+        {
+            _lineup2MapWins++;
+        }
+        else
+        {
+            return;
+        }
+
+        int mapsToWinSeries = (_matchData.options.best_of / 2) + 1;
+        bool seriesDecided =
+            _lineup1MapWins >= mapsToWinSeries || _lineup2MapWins >= mapsToWinSeries;
+
+        _gameServer.Message(
+            HudDestination.Chat,
+            seriesDecided
+                ? $"{ChatColors.Orange}[DEAFCS] {ChatColors.Yellow}"
+                    + _localizer["series.stats_available"]
+                : $"{ChatColors.Orange}[DEAFCS] {ChatColors.Yellow}"
+                    + _localizer["series.next_map_starting"]
+        );
     }
 
     // Re-execs the current match-type cfg (5stack.duel/wingman/competitive

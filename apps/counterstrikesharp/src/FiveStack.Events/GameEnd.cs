@@ -78,6 +78,8 @@ public partial class FiveStackPlugin
             ? _surrenderSystem.GetWinningLineupId()
             : _matchEvents.GetWinningLineupId();
 
+        match.AnnounceSeriesProgress(winningLineupId);
+
         // Move the map off Live immediately so it reflects WaitingForTV during the
         // tv_delay window (HandleEndOfMap may be deferred by use_playcast). This is
         // deduped in UpdateMapStatus, so HandleEndOfMap re-setting it is a no-op.
