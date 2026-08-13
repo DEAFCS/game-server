@@ -1,4 +1,5 @@
 using CounterStrikeSharp.API.Modules.Utils;
+using FiveStack.Entities;
 using FiveStack.Utilities;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
@@ -67,14 +68,16 @@ public class DisconnectBudgetSystem
             return;
         }
 
-        // Tournament matches don't auto-ban for taking too long to
-        // reconnect -- unlimited time, an admin/organizer handles a no-show
-        // manually if it becomes a problem. MM keeps the full escalating
-        // 5-minute-budget ban system unchanged. Gated here at the very
-        // start so no timer ever gets created for a tournament match --
-        // ScheduleMilestones/HandleBudgetExhausted below are simply never
-        // reachable for one.
-        if (match.GetMatchData()?.is_tournament_match == true)
+        // Tournament and draft matches don't auto-ban for taking too long
+        // to reconnect -- unlimited time (tournament: an admin/organizer
+        // handles a no-show manually; draft: reported live, leaving a
+        // draft lobby/match shouldn't cost a matchmaking_cooldown hit at
+        // all). MM keeps the full escalating 5-minute-budget ban system
+        // unchanged. Gated here at the very start so no timer ever gets
+        // created for either -- ScheduleMilestones/HandleBudgetExhausted
+        // below are simply never reachable for them.
+        MatchData? matchData = match.GetMatchData();
+        if (matchData?.is_tournament_match == true || matchData?.is_draft_match == true)
         {
             return;
         }
