@@ -62,7 +62,15 @@ public class SurrenderSystem
 
         // MM-only -- tournament matches have an admin/organizer expected to
         // resolve a no-show manually instead of a player-triggered vote.
-        if (match.GetMatchData()?.is_tournament_match == true)
+        // Draft matches too, now that DisconnectBudgetSystem is disabled
+        // for them (no cooldown for leaving a draft) -- the
+        // "allMissingConfirmedGone" check below would otherwise never be
+        // satisfiable, since a draft player's budget can never exhaust;
+        // a whole-empty-team draft still resolves via
+        // TeamEmptyForfeitSystem's own independent 5-min clock, a partial
+        // no-show is the host/organizer's call, same as tournament.
+        MatchData? matchData = match.GetMatchData();
+        if (matchData?.is_tournament_match == true || matchData?.is_draft_match == true)
         {
             _gameServer.Message(
                 HudDestination.Chat,
