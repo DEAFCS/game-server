@@ -31,6 +31,13 @@ public class MatchManager
     // before setup runs, so maps 2+ silently skip their cfg.
     private Guid? _configuredMapId;
     private Timer? _resumeMessageTimer;
+    // Tracks the retry timer PauseMatch schedules when a native tactical
+    // timeout is blocking mp_pause_match (see PauseMatch below). Needed so
+    // a since-resolved pause request (e.g. the disconnected player already
+    // reconnected) can cancel the still-pending retry -- otherwise it fires
+    // once the timeout naturally clears and freezes an already-full match
+    // with nothing left to ever resume it.
+    private Timer? _pendingPauseRetryTimer;
     public bool gameEnded = false;
 
     private readonly MatchEvents _matchEvents;
@@ -259,10 +266,21 @@ public class MatchManager
             // time as a tactical timeout resumed as 1v0 once the timeout
             // ended, since our pause never actually landed). Retry once the
             // timeout clears instead of racing it.
-            TimerUtility.AddTimer(1.0f, () => PauseMatch(message, skipUpdate));
+            //
+            // The retry timer itself is kept in _pendingPauseRetryTimer so
+            // it can be cancelled if the original reason for this pause
+            // request no longer applies by the time it would fire (e.g. the
+            // disconnected player reconnects before the tactical timeout
+            // ends) -- see CancelPendingPauseRetry.
+            _pendingPauseRetryTimer?.Kill();
+            _pendingPauseRetryTimer = TimerUtility.AddTimer(
+                1.0f,
+                () => PauseMatch(message, skipUpdate)
+            );
             return;
         }
 
+        _pendingPauseRetryTimer = null;
         _gameServer.SendCommands(["mp_pause_match"]);
 
         if (IsPaused())
@@ -309,6 +327,18 @@ public class MatchManager
         }
 
         UpdateMapStatus(eMapStatus.Paused);
+    }
+
+    // Cancels a PauseMatch retry queued while a native tactical timeout was
+    // active, without touching anything else -- for the case where whatever
+    // triggered that pause request no longer applies (e.g. a team-empty
+    // pause request queued behind an active timeout, then the disconnected
+    // player reconnects before the timeout ends). Safe to call even when
+    // there's nothing pending.
+    public void CancelPendingPauseRetry()
+    {
+        _pendingPauseRetryTimer?.Kill();
+        _pendingPauseRetryTimer = null;
     }
 
     public void ResumeMatch(string? message = null, bool skipUpdate = false)

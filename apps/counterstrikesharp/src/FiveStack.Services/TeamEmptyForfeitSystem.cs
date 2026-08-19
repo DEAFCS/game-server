@@ -157,6 +157,15 @@ public class TeamEmptyForfeitSystem
 
         if (wasTracking && resumeMatch != null)
         {
+            // Reported bug: reconnecting while a tactical timeout was still
+            // counting down left the match stuck paused once the timeout
+            // naturally ended. HandleEmptyTeam's PauseMatch call can still
+            // be queued as a pending retry behind that active timeout (see
+            // MatchManager.PauseMatch) -- now that the team isn't empty
+            // anymore, that stale retry must be cancelled too, or it fires
+            // once the timeout clears and freezes an already-full match
+            // with nothing left to ever resume it.
+            resumeMatch.CancelPendingPauseRetry();
             resumeMatch.ResumeMatch();
         }
     }
