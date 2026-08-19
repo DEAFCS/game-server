@@ -32,7 +32,7 @@ namespace FiveStack;
 // CancelExpiredMatches uses for the no-show cancel-or-force-start decision.
 public class WarmupShortenSystem
 {
-    private const int ShortenedWarmupSeconds = 60;
+    private const int ShortenedWarmupSeconds = 15;
 
     private readonly GameServer _gameServer;
     private readonly MatchService _matchService;
