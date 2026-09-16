@@ -86,6 +86,28 @@ public partial class FiveStackPlugin
 
         match.EnforceMemberTeam(player, Team.None);
 
+        // GetExpectedTeam() (called above via EnforceMemberTeam) already
+        // renames the player to their DEAFCS name, but on a mid-match
+        // reconnect the client's own userinfo (raw Steam name) hasn't
+        // finished syncing at the exact moment player_connect_full fires --
+        // that sync lands a moment later and silently stomps our override,
+        // which is why a reconnecting player would end up back on their
+        // Steam name instead. Re-asserting it once more after a short delay
+        // (same 0.1s pattern EnforceMemberTeam's own team-change timer
+        // uses, for the same "too early" reason) wins the race.
+        TimerUtility.AddTimer(
+            0.5f,
+            () =>
+            {
+                if (!player.IsValid)
+                {
+                    return;
+                }
+
+                match.GetExpectedTeam(player);
+            }
+        );
+
         _matchEvents.PublishGameEvent(
             "player-connected",
             new Dictionary<string, object>
