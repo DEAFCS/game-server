@@ -117,17 +117,39 @@ public partial class FiveStackPlugin
             }
         );
 
-        match.teamEmptyForfeitSystem.Check();
         match.warmupShortenSystem.Check();
 
-        // Auto-resume the moment the full expected roster is back, instead
-        // of requiring someone to type .resume manually. Safe to call
-        // unconditionally -- ResumeMatch() is a no-op (beyond an idempotent
-        // mp_unpause_match) when the match isn't actually paused.
-        if (MatchUtility.PlayerCount() == match.GetExpectedPlayerCount())
+        // Deferred one tick, same reasoning as OnPlayerDisconnect's own
+        // Check() call: at the moment player_connect_full fires, the engine
+        // hasn't finished adding this player back to its own player list
+        // yet, so a synchronous team-count/PlayerCount() read here still
+        // sees them as absent. That read a stale "still empty" team, which
+        // just re-affirmed TeamEmptyForfeitSystem's existing pause instead
+        // of clearing it (its "already tracking" branch doesn't resume),
+        // and PlayerCount() undercounted by one so the explicit resume
+        // below never fired either -- with no further connect/disconnect
+        // event to ever retry it, the match stayed paused for the rest of
+        // the match. Reported live: reconnect within ~30s of a disconnect,
+        // match stuck paused until auto-cancel.
+        _core.Scheduler.NextTick(() =>
         {
-            match.ResumeMatch();
-        }
+            if (!player.IsValid)
+            {
+                return;
+            }
+
+            match.teamEmptyForfeitSystem.Check();
+
+            // Auto-resume the moment the full expected roster is back,
+            // instead of requiring someone to type .resume manually. Safe
+            // to call unconditionally -- ResumeMatch() is a no-op (beyond
+            // an idempotent mp_unpause_match) when the match isn't
+            // actually paused.
+            if (MatchUtility.PlayerCount() == match.GetExpectedPlayerCount())
+            {
+                match.ResumeMatch();
+            }
+        });
 
         return HookResult.Continue;
     }
