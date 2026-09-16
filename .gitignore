@@ -5,6 +5,7 @@ release
 **/bin/
 **/obj/
 **/build/
+.vs/
 *.generated.sln
 Folder.DotSettings.user
 
