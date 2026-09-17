@@ -40,6 +40,18 @@ public class DisconnectBudgetSystem
     private readonly Dictionary<ulong, List<CancellationTokenSource>> _milestoneTimers =
         new Dictionary<ulong, List<CancellationTokenSource>>();
 
+    // Once a player's budget is exhausted it stays exhausted (_usedSeconds is
+    // pinned at BudgetSeconds) -- so every subsequent disconnect in the same
+    // match, even a fraction of a second long, would otherwise re-enter the
+    // `remaining <= 0` branch and re-fire HandleBudgetExhausted, publishing
+    // another leaver-timeout event and stacking another escalating ban on
+    // top of the one already applied. Reported live: one player's brief
+    // reconnect/drop cycles after their first ban re-triggered it three more
+    // times in the same match, taking their leaver_ban_stage from 2 to 4.
+    // This set makes the exhaustion event fire exactly once per player per
+    // match.
+    private readonly HashSet<ulong> _exhaustedNotified = new HashSet<ulong>();
+
     // Milestone announcements that tried to fire mid-round (not freeze
     // period) get queued here instead of dropped, and flushed the moment
     // freeze period starts (see FlushPendingAnnouncements, called from
@@ -249,6 +261,16 @@ public class DisconnectBudgetSystem
         _disconnectedAt.Remove(steamId);
         KillMilestoneTimers(steamId);
 
+        if (!_exhaustedNotified.Add(steamId))
+        {
+            // Already reported once this match -- e.g. this disconnect is a
+            // fresh drop after an earlier one already exhausted the budget
+            // (remaining <= 0 in OnPlayerDisconnected calls straight back
+            // in here). Only the ban/announcement/event from the first
+            // exhaustion should ever go out.
+            return;
+        }
+
         string playerName = _playerNames.GetValueOrDefault(steamId, steamId.ToString());
 
         _logger.LogInformation($"Disconnect budget exhausted for {steamId}");
@@ -278,5 +300,6 @@ public class DisconnectBudgetSystem
         _disconnectedAt.Clear();
         _playerNames.Clear();
         _pendingAnnouncements.Clear();
+        _exhaustedNotified.Clear();
     }
 }
