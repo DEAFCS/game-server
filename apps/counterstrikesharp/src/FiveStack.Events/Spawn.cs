@@ -1,9 +1,11 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
 using FiveStack.Utilities;
 using Microsoft.Extensions.Logging;
+using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
 
 namespace FiveStack;
 
@@ -28,21 +30,30 @@ public partial class FiveStackPlugin
         // Same race as OnPlayerConnect (see PlayerConnected.cs): CS2 can sync
         // the client's own userinfo (raw Steam name, e.g. after the player
         // renamed themselves on Steam mid-match) and silently stomp our
-        // DEAFCS-name override at any point, not just on initial connect.
-        // Every round's spawn is a convenient, frequent point to win that
-        // race back -- GetExpectedTeam() re-derives and re-applies the
-        // correct name as a side effect, same call the connect path uses.
-        TimerUtility.AddTimer(
-            0.5f,
+        // DEAFCS-name override at any point during the round, not just right
+        // after spawn -- reproduced live with a ~48s gap between the correct
+        // name and the stomp, well past a single one-shot recheck. Re-assert
+        // every few seconds for the rest of the round instead of once:
+        // GetExpectedTeam() re-derives and re-applies the correct name as a
+        // side effect, same call the connect path uses. Capped rather than
+        // indefinite so a long-lived player doesn't accumulate one of these
+        // per spawn forever.
+        int nameEnforcementTicks = 0;
+        Timer? nameEnforcementTimer = null;
+        nameEnforcementTimer = TimerUtility.AddTimer(
+            3.0f,
             () =>
             {
-                if (!spawnedPlayer.IsValid)
+                nameEnforcementTicks++;
+                if (!spawnedPlayer.IsValid || nameEnforcementTicks >= 40)
                 {
+                    nameEnforcementTimer?.Kill();
                     return;
                 }
 
                 match.GetExpectedTeam(spawnedPlayer);
-            }
+            },
+            TimerFlags.REPEAT
         );
 
         if ((match.GetMatchData()?.options.default_models ?? false) == false)
