@@ -1093,35 +1093,6 @@ public class MatchManager
         });
     }
 
-    // Bursts several quick re-asserts right at the two moments players
-    // reported the DEAFCS name and the raw Steam name visibly fighting each
-    // other: knife round start, and again once CT/T is finalized after
-    // knife (stay/switch/skip/timeout all funnel through here via
-    // UpdateMapStatus(Live)). The general per-spawn recheck (see Spawn.cs)
-    // only runs every 3s -- fine as a steady-state safety net, but visibly
-    // slow against a stomp landing within 2-3s of one of these
-    // transitions, which is exactly the window reported live.
-    private void BurstReassertPlayerNames()
-    {
-        for (int tick = 0; tick < 8; tick++)
-        {
-            TimerUtility.AddTimer(
-                0.25f * (tick + 1),
-                () =>
-                {
-                    foreach (CCSPlayerController player in MatchUtility.Players())
-                    {
-                        if (!player.IsValid || player.IsBot)
-                        {
-                            continue;
-                        }
-                        GetExpectedTeam(player);
-                    }
-                }
-            );
-        }
-    }
-
     private void StartKnife()
     {
         ConVar.Find("sv_disable_teamselect_menu")?.SetValue(true);
@@ -1134,7 +1105,6 @@ public class MatchManager
         captainSystem.AutoSelectCaptains();
 
         knifeSystem.Start();
-        BurstReassertPlayerNames();
     }
 
     private void StartLive()
@@ -1147,8 +1117,6 @@ public class MatchManager
         }
 
         _logger.LogInformation("Starting Live Match");
-
-        BurstReassertPlayerNames();
 
         ConVar.Find("sv_disable_teamselect_menu")?.SetValue(true);
 
