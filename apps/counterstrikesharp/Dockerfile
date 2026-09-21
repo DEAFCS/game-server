@@ -1,4 +1,10 @@
-FROM registry.gitlab.steamos.cloud/steamrt/sniper/platform:latest-container-runtime-depot AS build
+# Pinned to today's "latest-container-runtime-depot" digest -- that tag can move
+# under us with no warning (see the broken Debian apt mirror this pin was
+# added alongside), so build reproducibility depends on pinning here rather
+# than trusting the tag to stay put. Bump deliberately if Valve publishes an
+# update worth taking; check via: docker buildx imagetools inspect
+# registry.gitlab.steamos.cloud/steamrt/sniper/platform:latest-container-runtime-depot
+FROM registry.gitlab.steamos.cloud/steamrt/sniper/platform@sha256:8cd1bdfc418afd8b019a69d6f5a9305865a5f3bb5554102006fdb8f6853d5f67 AS build
 
 # Install .NET SDK 10.0
 RUN apt-get update && \
@@ -47,7 +53,13 @@ RUN apt-get update && \
     zip -r /mod-release.zip . && \
     rm -rf /var/lib/apt/lists/*
 
-FROM registry.gitlab.steamos.cloud/steamrt/sniper/platform:latest-container-runtime-depot
+# Pinned to today's "latest-container-runtime-depot" digest -- that tag can move
+# under us with no warning (see the broken Debian apt mirror this pin was
+# added alongside), so build reproducibility depends on pinning here rather
+# than trusting the tag to stay put. Bump deliberately if Valve publishes an
+# update worth taking; check via: docker buildx imagetools inspect
+# registry.gitlab.steamos.cloud/steamrt/sniper/platform:latest-container-runtime-depot
+FROM registry.gitlab.steamos.cloud/steamrt/sniper/platform@sha256:8cd1bdfc418afd8b019a69d6f5a9305865a5f3bb5554102006fdb8f6853d5f67
 
 ENV DATA_DIR="/serverdata"
 ENV STEAMCMD_DIR="${DATA_DIR}/steamcmd"
@@ -84,10 +96,43 @@ ENV METAMOD_CSGO_URL=https://mms.alliedmods.net/mmsdrop/1.12/mmsource-1.12.0-git
 ENV SOURCEMOD_CSGO_URL=https://sm.alliedmods.net/smdrop/1.13/sourcemod-1.13.0-git7297-linux.tar.gz
 ENV NO_LOBBY_RESERVATION_URL=https://github.com/nuxencs/NoLobbyReservation/releases/download/v0.0.1/NoLobbyReservation.zip
 
-RUN apt-get update && \
+# The base image's stock sources.list still points at deb.debian.org,
+# which 404s now that bullseye is EOL and moved to the archive -- and
+# archive.debian.org never carried a separate bullseye-security suite at
+# all (its Release file 404s too), so that line has to go rather than
+# just being repointed.
+#
+# libicu-dev was dropped: it's compile-time ICU headers, this is the
+# runtime stage, and libicu67 (the actual runtime lib .NET needs) is
+# already present in the base image.
+#
+# lib32gcc-s1/lib32stdc++6/lib32z1 each hard-depend on the *package
+# literally named* libc6-i386 -- a separate, older-style i386-compat
+# package predating multiarch, distinct from (and not satisfied by) the
+# modern libc6:i386 multiarch package this base image already has
+# installed and current. archive.debian.org only ever has libc6-i386
+# itself at its last-ever build (deb11u11), permanently mismatched
+# against the newer libc6 everything else now resolves to, so apt's own
+# resolver refuses the whole transaction outright ("held broken
+# packages") before dpkg (and any Dpkg::Options) ever gets a say. The
+# actual 32-bit libc capability is already satisfied (verified live:
+# libc6:i386 present, current), so these three are fetched with
+# `apt-get download` (which -- unlike install -- never resolves or
+# checks dependencies, just grabs the requested .debs) and installed
+# directly via dpkg, whose --force-depends downgrades that one stale
+# by-name check to a warning instead of a hard failure.
+RUN sed -i \
+	-e 's|deb.debian.org|archive.debian.org|g' \
+	-e '/-security/d' \
+	/etc/apt/sources.list && \
+	apt-get update && \
 	apt-get install -y --no-install-recommends \
-	wget locales procps jq ca-certificates curl unzip rsync \
-	lib32gcc-s1 lib32stdc++6 lib32z1 lsof libicu-dev && \
+	wget locales procps jq ca-certificates curl unzip rsync lsof && \
+	cd /tmp && \
+	apt-get download lib32gcc-s1 lib32stdc++6 lib32z1 && \
+	dpkg -i --force-depends ./*.deb && \
+	rm -f ./*.deb && \
+	cd / && \
 	echo "en_US.UTF-8 UTF-8" > /etc/locale.gen && \
 	locale-gen && \
 	rm -rf /var/lib/apt/lists/*
