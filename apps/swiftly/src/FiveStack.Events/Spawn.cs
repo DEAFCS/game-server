@@ -1,4 +1,3 @@
-using System.Threading;
 using FiveStack.Utilities;
 using Microsoft.Extensions.Logging;
 using SwiftlyS2.Shared.GameEventDefinitions;
@@ -35,24 +34,16 @@ public partial class FiveStackPlugin
         // Same race as OnPlayerConnect (see PlayerConnected.cs): the
         // client's own userinfo (raw Steam name, e.g. after the player
         // renamed themselves on Steam mid-match) can sync and silently
-        // stomp our DEAFCS-name override at any point during the round, not
-        // just right after spawn -- reproduced live with a ~48s gap between
-        // the correct name and the stomp, well past a single one-shot
-        // recheck. Re-assert every few seconds for the rest of the round
-        // instead of once: GetExpectedTeam() re-derives and re-applies the
-        // correct name as a side effect, same call the connect path uses.
-        // Capped rather than indefinite so a long-lived player doesn't
-        // accumulate one of these per spawn forever.
-        int nameEnforcementTicks = 0;
-        CancellationTokenSource? nameEnforcementTimer = null;
-        nameEnforcementTimer = TimerUtility.Repeat(
-            3.0f,
+        // stomp our DEAFCS-name override at any point, not just on initial
+        // connect. Every round's spawn is a convenient, frequent point to
+        // win that race back -- GetExpectedTeam() re-derives and re-applies
+        // the correct name as a side effect, same call the connect path uses.
+        TimerUtility.AddTimer(
+            0.5f,
             () =>
             {
-                nameEnforcementTicks++;
-                if (!spawnedPlayer.IsValid || nameEnforcementTicks >= 40)
+                if (!spawnedPlayer.IsValid)
                 {
-                    TimerUtility.Kill(nameEnforcementTimer);
                     return;
                 }
 
