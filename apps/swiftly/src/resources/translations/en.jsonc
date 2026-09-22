@@ -53,7 +53,7 @@
   "auto_cancel.confirmed": "[orange][DEAFCS] [red]Match canceled — player(s) did not join in time and have been banned",
 
   "leaver.reconnect_warning": "{0} has {1} min left to reconnect before being banned",
-  "leaver.banned": "{0} did not reconnect in time and has been banned",
+  "leaver.banned": "{0} did not reconnect in time and received a cooldown ban, but can still rejoin this match",
 
   "auto_cancel.missing_players_warning": "{1} - {0} min left to join before the match is canceled",
 
