@@ -361,7 +361,25 @@ public class CaptainSystem
                 continue;
             }
 
-            if (_captains[side]?.SteamID.ToString() == steamId)
+            IPlayer? captain = _captains[side];
+
+            if (captain == null)
+            {
+                continue;
+            }
+
+            // A disconnected player's IPlayer reference gets disposed by the
+            // engine, but nothing clears it out of _captains -- reading
+            // .SteamID on it here then threw ObjectDisposedException
+            // (uncaught), which aborted the entire OnPlayerConnect call this
+            // runs from, silently skipping everything queued after it (e.g.
+            // the empty-server restore check) for that reconnect. Every
+            // other read of _captains in this file already guards with
+            // IsValid (see GetTeamCaptain/IsCaptainEntryValidForTeam) --
+            // this was the one spot that didn't. Reported live: a returning
+            // captain silently lost their captain status until they typed
+            // .captain again.
+            if (!captain.IsValid || captain.SteamID.ToString() == steamId)
             {
                 _captains[side] = null;
             }

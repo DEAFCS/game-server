@@ -352,7 +352,21 @@ public class CaptainSystem
                 continue;
             }
 
-            if (_captains[side]?.SteamID.ToString() == steamId)
+            CCSPlayerController? captain = _captains[side];
+
+            if (captain == null)
+            {
+                continue;
+            }
+
+            // A disconnected player's controller gets invalidated by the
+            // engine, but nothing clears it out of _captains -- reading
+            // .SteamID on it here then threw an exception (uncaught), which
+            // aborted the entire OnPlayerConnect call this runs from,
+            // silently skipping everything queued after it for that
+            // reconnect. Reported live: a returning captain silently lost
+            // captain status until they typed .captain again.
+            if (!captain.IsValid || captain.SteamID.ToString() == steamId)
             {
                 _captains[side] = null;
             }
