@@ -98,6 +98,7 @@ public partial class FiveStackPlugin : BasePlugin
         _gameServer.Ping(ModuleVersion);
 
         AddCommandListener("say", OnPlayerChat, HookMode.Pre);
+        AddCommandListener("say_team", OnPlayerTeamChat, HookMode.Pre);
 
         AddCommandListener("say", GagPlayer, HookMode.Pre);
         AddCommandListener("say_team", GagPlayer, HookMode.Pre);

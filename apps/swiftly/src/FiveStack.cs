@@ -143,13 +143,14 @@ public partial class FiveStackPlugin : BasePlugin
 
                 HookResult result = HookResult.Continue;
 
-                if (!teamonly)
+                // Previously skipped entirely for team-only chat, so
+                // say_team never reached DEAFCS at all -- OnPlayerChat
+                // itself now branches on teamonly to route to the right
+                // room (see PlayerChat.cs).
+                HookResult chatResult = OnPlayerChat(player, message, teamonly);
+                if (chatResult != HookResult.Continue)
                 {
-                    HookResult chatResult = OnPlayerChat(player, message, teamonly);
-                    if (chatResult != HookResult.Continue)
-                    {
-                        result = chatResult;
-                    }
+                    result = chatResult;
                 }
 
                 HookResult gagResult = GagPlayer(player, message, teamonly);

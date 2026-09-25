@@ -17,7 +17,16 @@ public partial class FiveStackPlugin
 
         if (player.Controller.Team == Team.Spectator)
         {
-            PublishChatEvent(player, message);
+            // Spectators aren't on a match lineup, so "team chat" from
+            // them has no DEAFCS-side room to go to -- leave the
+            // existing all-chat behavior untouched and simply don't
+            // relay their say_team at all rather than mislabeling it.
+            if (teamOnly)
+            {
+                return HookResult.Continue;
+            }
+
+            PublishChatEvent(player, message, teamOnly: false, lineupId: null);
 
             _gameServer.Message(
                 MessageType.Chat,
@@ -55,20 +64,33 @@ public partial class FiveStackPlugin
             }
         }
 
-        PublishChatEvent(player, message);
+        PublishChatEvent(
+            player,
+            message,
+            teamOnly,
+            teamOnly ? member?.match_lineup_id.ToString() : null
+        );
 
         return HookResult.Continue;
     }
 
-    private void PublishChatEvent(IPlayer player, string message)
+    private void PublishChatEvent(
+        IPlayer player,
+        string message,
+        bool teamOnly,
+        string? lineupId
+    )
     {
-        _matchEvents.PublishGameEvent(
-            "chat",
-            new Dictionary<string, object>
-            {
-                { "player", player.SteamID.ToString() },
-                { "message", message },
-            }
-        );
+        Dictionary<string, object> data = new()
+        {
+            { "player", player.SteamID.ToString() },
+            { "message", message },
+            { "teamOnly", teamOnly },
+        };
+        if (lineupId != null)
+        {
+            data["lineupId"] = lineupId;
+        }
+        _matchEvents.PublishGameEvent("chat", data);
     }
 }
