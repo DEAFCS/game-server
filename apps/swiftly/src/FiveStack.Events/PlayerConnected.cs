@@ -84,7 +84,30 @@ public partial class FiveStackPlugin
             return HookResult.Continue;
         }
 
-        match.EnforceMemberTeam(player, Team.None);
+        // Deferred one tick so this doesn't race CS2's own native
+        // halftime/OT side-swap (CCSGameRules::Think
+        // bHalftime SwitchTeamsAtRoundReset(), logged as "OnPreResetRound"),
+        // which blindly flips whichever team every currently-connected
+        // player is on to the opposite side once bHalftime is set -- not
+        // FiveStack code, so we can't hook into or order against it
+        // directly. If a player reconnects in the same tick that native
+        // swap fires, assigning their final expected team synchronously
+        // here meant the native swap then flipped them AGAIN right after,
+        // landing them on the wrong side -- reported live as a 6v4 split
+        // right after an OT halftime switch (the reconnecting player was
+        // flipped twice while everyone else, already sitting on their
+        // pre-switch side, only got flipped once by the native swap).
+        // Running this a tick later gives the native swap a chance to
+        // fire first, so our assignment is the authoritative last word.
+        _core.Scheduler.NextTick(() =>
+        {
+            if (!player.IsValid)
+            {
+                return;
+            }
+
+            match.EnforceMemberTeam(player, Team.None);
+        });
 
         _matchEvents.PublishGameEvent(
             "player-connected",
