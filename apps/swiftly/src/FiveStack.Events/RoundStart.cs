@@ -49,6 +49,14 @@ public partial class FiveStackPlugin
         if (totalRoundsPlayed == 0)
         {
             matchManager.ReapplyMatchTypeCfg();
+
+            // Log-confirmed: this re-exec is the second, separate point
+            // (distinct from StartLive()'s own re-assert) where a player's
+            // name flips back to their raw Steam name -- nothing else fires
+            // in the gap between a confirmed-correct name and the next
+            // observed wrong one except this cfg re-exec. Same one-shot
+            // treatment, no timer.
+            matchManager.ReassertPlayerNames();
         }
 
         PublishPendingRound(SendBackupRound: true);
