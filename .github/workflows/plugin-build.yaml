@@ -63,7 +63,11 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const owner = context.repo.owner;
+            // ghcr.io repo paths must be all-lowercase; the org itself is
+            // "DEAFCS" (mixed case), which buildx rejects as an image tag --
+            // every push-to-main build has failed on this since the
+            // monorepo migration.
+            const owner = context.repo.owner.toLowerCase();
             const { CHANNEL: channel, TAG_PREFIX: prefix, IMAGE: image } = process.env;
             const sha = context.sha;
 
@@ -122,7 +126,7 @@ jobs:
           tags: mod-builder:latest
           build-args: |
             RELEASE_VERSION=${{ steps.resolve.outputs.release_version }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ inputs.image }}:buildcache
+          cache-from: type=registry,ref=ghcr.io/${{ toLower(github.repository_owner) }}/${{ inputs.image }}:buildcache
 
       - name: Extract zip file
         run: |
@@ -139,8 +143,8 @@ jobs:
           tags: ${{ steps.resolve.outputs.tags }}
           build-args: |
             RELEASE_VERSION=${{ steps.resolve.outputs.release_version }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ inputs.image }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/${{ inputs.image }}:buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/${{ toLower(github.repository_owner) }}/${{ inputs.image }}:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ toLower(github.repository_owner) }}/${{ inputs.image }}:buildcache,mode=max
 
       - name: Create Release and Upload Asset
         uses: softprops/action-gh-release@v2
