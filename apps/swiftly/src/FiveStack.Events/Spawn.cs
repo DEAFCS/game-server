@@ -29,6 +29,26 @@ public partial class FiveStackPlugin
             return HookResult.Continue;
         }
 
+        IPlayer spawnedPlayer = @event.UserIdPlayer;
+
+        // Valve can apply its own "social penalty" comms mute (reports from
+        // outside DEAFCS) independently of our admin mute system, which uses
+        // player.VoiceFlags instead (see MatchManager.GetExpectedTeam) -- so
+        // clearing this never bypasses a DEAFCS-issued mute. Clearing it on
+        // connect (PlayerConnected.cs) is too early: the engine re-applies
+        // it once the penalty status arrives from the session/GC side, so it
+        // has to be cleared on every spawn instead. See DEAFCS/deafcs-web#115
+        // -- sv_mute_players_with_social_penalties 0 does not work on our
+        // current CS2 server setup.
+        try
+        {
+            spawnedPlayer.Controller.HasCommunicationAbuseMute = false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Could not clear Valve communication abuse mute");
+        }
+
         if ((match.GetMatchData()?.options.default_models ?? false) == false)
         {
             return HookResult.Continue;
