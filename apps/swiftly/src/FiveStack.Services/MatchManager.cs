@@ -1438,9 +1438,13 @@ public class MatchManager
 
         if (player.Name != name)
         {
+            string oldName = player.Name;
             player.Controller.PlayerName = name;
             player.Controller.PlayerNameUpdated();
             changed = true;
+            _logger.LogInformation(
+                $"[name-sync] DEAFCS wrote name steamid={player.SteamID} old=\"{oldName}\" new=\"{name}\""
+            );
         }
 
         if (tag != null)

@@ -43,6 +43,7 @@ public partial class FiveStackPlugin : BasePlugin
     private Guid _chatHookId;
     private Guid _commandHookId;
     private EventDelegates.OnPrecacheResource? _precacheHandler;
+    private EventDelegates.OnConVarValueChanged? _nameSyncConVarHandler;
 
     public FiveStackPlugin(ISwiftlyCore core)
         : base(core) { }
@@ -127,6 +128,11 @@ public partial class FiveStackPlugin : BasePlugin
 
         Core.Event.OnMapLoad += OnMapLoad;
 
+        // See NameChangeLog.cs -- traces where/when a player's DEAFCS name
+        // gets forced back to their raw Steam name, read-only.
+        _nameSyncConVarHandler = OnConVarChangeNameLog;
+        Core.Event.OnConVarValueChanged += _nameSyncConVarHandler;
+
         _precacheHandler = (@event) =>
         {
             @event.AddItem(ModelPathCtmSas);
@@ -210,6 +216,11 @@ public partial class FiveStackPlugin : BasePlugin
             if (_commandHookId != Guid.Empty)
             {
                 Core.Command.UnhookClientCommand(_commandHookId);
+            }
+
+            if (_nameSyncConVarHandler != null)
+            {
+                Core.Event.OnConVarValueChanged -= _nameSyncConVarHandler;
             }
         }
         catch (Exception ex)
