@@ -1164,7 +1164,6 @@ public class MatchManager
                     // workshop maps.
                     ReapplyMatchTypeCfg();
                     _timeoutSystem.PublishTimeoutState();
-                    ReassertPlayerNames();
                 });
             });
         });
@@ -1415,45 +1414,6 @@ public class MatchManager
                 "updateLineups",
                 new Dictionary<string, object> { { "lineups", lineups } }
             );
-        }
-    }
-
-    // One-shot re-assert of every connected player's DEAFCS name, called
-    // right after mp_restartgame in StartLive() (see the log-confirmed
-    // repro: name is correct through the knife round, then flips back to
-    // the raw Steam name the moment CT/T is finalized and mp_restartgame
-    // fires -- none of player_info/OnConVarValueChanged/SetConVar catch
-    // that flip, so this can't react to it, only re-assert after the fact).
-    // Deliberately not a timer/burst/periodic recheck -- runs exactly once,
-    // in the same tick ReapplyMatchTypeCfg() already re-applies cvars in.
-    public void ReassertPlayerNames()
-    {
-        MatchData? matchData = GetMatchData();
-
-        if (matchData == null)
-        {
-            return;
-        }
-
-        foreach (IPlayer player in MatchUtility.Players())
-        {
-            if (!player.IsValid || player.IsFakeClient)
-            {
-                continue;
-            }
-
-            MatchMember? member = MatchUtility.GetMemberFromLineup(
-                matchData,
-                player.SteamID.ToString(),
-                player.Name
-            );
-
-            if (member == null)
-            {
-                continue;
-            }
-
-            UpdatePlayerName(player, member.name);
         }
     }
 
