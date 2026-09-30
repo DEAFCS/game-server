@@ -30,6 +30,15 @@ public partial class FiveStackPlugin
 
         IPlayer player = @event.UserIdPlayer;
 
+        // This disconnect is us kicking a 6th man who tried to join a full
+        // lineup (see OnPlayerConnect) -- they never actually played, so none
+        // of the below (leaver tracking, ready/captain cleanup, forfeit vote
+        // removal) should treat this as a real departure.
+        if (_overCapacityKicks.Remove(player.SteamID))
+        {
+            return HookResult.Continue;
+        }
+
         MatchMember? member = MatchUtility.GetMemberFromLineup(
             matchData,
             player.SteamID.ToString(),

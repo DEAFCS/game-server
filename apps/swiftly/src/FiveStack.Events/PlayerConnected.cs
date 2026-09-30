@@ -10,6 +10,8 @@ namespace FiveStack;
 
 public partial class FiveStackPlugin
 {
+    private readonly HashSet<ulong> _overCapacityKicks = new();
+
     [GameEventHandler(HookMode.Post)]
     public HookResult OnPlayerConnect(EventPlayerConnectFull @event)
     {
@@ -30,6 +32,8 @@ public partial class FiveStackPlugin
         match.disconnectBudgetSystem.OnPlayerReconnected(@event.UserIdPlayer.SteamID);
 
         IPlayer player = @event.UserIdPlayer;
+
+        _overCapacityKicks.Remove(player.SteamID);
 
         Guid? lineup_id = MatchUtility.GetPlayerLineup(matchData, player);
         List<MatchMember> players = matchData
@@ -70,16 +74,37 @@ public partial class FiveStackPlugin
         }
 
         Team expectedTeam = match.GetExpectedTeam(player);
-        int expectedTeamCount = match.GetExpectedPlayerCount() / 2;
-        int teamCount = TeamUtility.GetTeamCount(expectedTeam);
+        int capacity = match.GetExpectedPlayerCount() / 2;
 
-        if (player.Controller.Team == expectedTeam)
+        // TeamUtility.GetTeamCount only checked whether the SIDE had anyone on
+        // it at all, not whether THIS player's own lineup already had a full
+        // team playing -- wrong through a halftime swap (the other lineup
+        // still stands on this side until the round resets) and wrong in
+        // general (it can't actually count past 1). Count this lineup's own
+        // connected, playing members instead.
+        if (
+            LineupCapacityUtility.IsOverCapacity(
+                MatchUtility
+                    .Players()
+                    .Select(connected =>
+                        (
+                            connected.SteamID.ToString(),
+                            MatchUtility.GetPlayerLineup(matchData, connected),
+                            (int)connected.Controller.Team
+                        )
+                    ),
+                player.SteamID.ToString(),
+                lineup_id,
+                (int)expectedTeam,
+                capacity
+            )
+        )
         {
-            teamCount--;
-        }
-
-        if (teamCount > expectedTeamCount)
-        {
+            // A kick counts as a disconnect too (see OnPlayerDisconnect) --
+            // decided before that fires so the kicked player is neither
+            // treated as having left the match nor counted towards a whole
+            // roster.
+            _overCapacityKicks.Add(player.SteamID);
             _core.Engine.ExecuteCommand($"kickid {player.UserID}");
             return HookResult.Continue;
         }
