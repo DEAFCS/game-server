@@ -53,6 +53,10 @@ public partial class FiveStackPlugin
 
         PublishPendingRound(SendBackupRound: true);
 
+        _logger.LogInformation($"OnRoundStart {matchManager.TeamSwitchState()}");
+
+        matchManager.ReconcileMemberTeams();
+
         // A .gg vote only stays valid for the round it was started in.
         _surrenderSystem.CancelPendingForfeitVote();
 

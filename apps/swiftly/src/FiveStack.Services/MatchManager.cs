@@ -1169,6 +1169,11 @@ public class MatchManager
         });
     }
 
+    // Off until verified on a live server through a regulation and an overtime
+    // halftime: CS2 also keeps a per-controller SwitchTeamsOnNextRoundReset,
+    // so the pending swap may skip a player who joined after it was armed.
+    private static readonly bool PlaceOnPreSwapSideWhileSwitching = false;
+
     public void EnforceMemberTeam(IPlayer player, Team? currentTeam = null)
     {
         Team expectedTeam = GetExpectedTeam(player);
@@ -1183,14 +1188,14 @@ public class MatchManager
             currentTeam = player.Controller.Team;
         }
 
-        bool shouldRespawn =
-            IsWarmup()
-            || (MatchUtility.Rules()?.FreezePeriod == true) && expectedTeam != Team.Spectator;
+        Team placementTeam = GetPlacementSide(expectedTeam);
 
-        if (currentTeam != expectedTeam)
+        bool shouldRespawn = ShouldRespawnOnTeamChange(expectedTeam);
+
+        if (currentTeam != placementTeam)
         {
             _logger.LogInformation(
-                $"[team] Changing Team {player.Name} ({player.SteamID}) {currentTeam} -> {expectedTeam} (respawn: {shouldRespawn})"
+                $"[team] Changing Team {player.Name} ({player.SteamID}) {currentTeam} -> {placementTeam} (expected: {expectedTeam}, respawn: {shouldRespawn})"
             );
 
             TimerUtility.AddTimer(
@@ -1202,17 +1207,22 @@ public class MatchManager
                         return;
                     }
 
-                    player.ChangeTeam(expectedTeam);
+                    Team applyExpectedTeam = GetExpectedSide(player);
 
-                    _logger.LogInformation(
-                        $"[team] ChangeTeam applied {player.Name} ({player.SteamID}) -> {expectedTeam}"
-                    );
+                    if (applyExpectedTeam == Team.None)
+                    {
+                        return;
+                    }
+
+                    Team applyPlacementTeam = GetPlacementSide(applyExpectedTeam);
+
+                    player.ChangeTeam(applyPlacementTeam);
 
                     // Respawn only once the team change has landed. Respawning
                     // first spawns the player while still unassigned, and the
                     // weapons a spawn creates are what the inventory plugin
                     // skins — a spawn on the wrong team wastes that one shot.
-                    if (shouldRespawn)
+                    if (shouldRespawn || ShouldRespawnOnTeamChange(applyExpectedTeam))
                     {
                         _core.Scheduler.NextTick(() =>
                         {
@@ -1222,11 +1232,15 @@ public class MatchManager
                             }
 
                             _logger.LogInformation(
-                                $"[team] Respawning {player.Name} ({player.SteamID}) after team change -> {expectedTeam}"
+                                $"[team] Respawning {player.Name} ({player.SteamID}) after team change -> {applyPlacementTeam}"
                             );
                             player.Respawn();
                         });
                     }
+
+                    _logger.LogInformation(
+                        $"[team] ChangeTeam applied {player.Name} ({player.SteamID}) -> {applyPlacementTeam} (expected: {applyExpectedTeam}, playerSwitchTeamsOnNextRoundReset: {player.Controller.SwitchTeamsOnNextRoundReset}, {TeamSwitchState()})"
+                    );
                 }
             );
 
@@ -1239,7 +1253,7 @@ public class MatchManager
         else if (shouldRespawn)
         {
             _logger.LogInformation(
-                $"[team] Respawning {player.Name} ({player.SteamID}) (already on {expectedTeam})"
+                $"[team] Respawning {player.Name} ({player.SteamID}) (already on {placementTeam})"
             );
             player.Respawn();
         }
@@ -1247,12 +1261,91 @@ public class MatchManager
         captainSystem.IsCaptain(player, expectedTeam);
     }
 
+    private bool ShouldRespawnOnTeamChange(Team team)
+    {
+        return IsWarmup()
+            || (MatchUtility.Rules()?.FreezePeriod == true) && team != Team.Spectator;
+    }
+
+    // Safety net for anyone who drifted off their expected side by the time a
+    // round actually starts (e.g. a reconnect that landed just before the
+    // engine's own halftime/OT swap fired -- see 651bd41). Only corrects a
+    // strict minority: if half or more of the placed players are mismatched,
+    // that means our own side-tracking is stale (a swap we haven't accounted
+    // for yet), not that the players are wrong, so leave them alone rather
+    // than fight the engine.
+    public void ReconcileMemberTeams()
+    {
+        List<IPlayer> mismatched = new List<IPlayer>();
+        int placed = 0;
+
+        foreach (var player in MatchUtility.Players())
+        {
+            Team expectedSide = GetExpectedSide(player);
+
+            if (expectedSide != Team.T && expectedSide != Team.CT)
+            {
+                continue;
+            }
+
+            placed++;
+
+            if (player.Controller.Team != expectedSide)
+            {
+                mismatched.Add(player);
+            }
+        }
+
+        if (mismatched.Count == 0)
+        {
+            return;
+        }
+
+        if (!TeamRotation.ShouldReconcile(mismatched.Count, placed))
+        {
+            _logger.LogWarning(
+                $"[team] Skipping round start reconcile: {mismatched.Count} of {placed} players are off their expected side ({TeamSwitchState()})"
+            );
+            return;
+        }
+
+        _logger.LogInformation(
+            $"[team] Round start reconcile: moving {mismatched.Count} of {placed} players to their expected side"
+        );
+
+        foreach (var player in mismatched)
+        {
+            EnforceMemberTeam(player);
+        }
+    }
+
+    // A pending halftime swap flips T/CT players at the round reset, so a
+    // player joining while a swap is armed has to be placed on the side
+    // opposite their expected final one, letting the engine's own swap carry
+    // them the rest of the way instead of getting flipped twice.
+    public Team GetPlacementSide(Team expectedSide)
+    {
+        bool switchingAtReset =
+            PlaceOnPreSwapSideWhileSwitching
+            && MatchUtility.Rules()?.SwitchingTeamsAtRoundReset == true;
+
+        return TeamUtility.TeamNumToTeam(
+            TeamRotation.PlacementSide((int)expectedSide, switchingAtReset)
+        );
+    }
+
+    public string TeamSwitchState()
+    {
+        CCSGameRules? rules = MatchUtility.Rules();
+
+        return $"switchingTeamsAtRoundReset={rules?.SwitchingTeamsAtRoundReset} gamePhase={rules?.GamePhase} freezePeriod={rules?.FreezePeriod}";
+    }
+
     public Team GetExpectedTeam(IPlayer player)
     {
         MatchData? matchData = GetMatchData();
-        MatchMap? currentMap = GetCurrentMap();
 
-        if (matchData == null || currentMap == null)
+        if (matchData == null)
         {
             return Team.None;
         }
@@ -1288,17 +1381,34 @@ public class MatchManager
             player.VoiceFlags = VoiceFlagValue.Normal;
         }
 
-        Guid? lineup_id = MatchUtility.GetPlayerLineup(matchData, player);
+        return GetExpectedSide(player);
+    }
 
-        if (lineup_id == null)
+    public Team GetExpectedSide(IPlayer player)
+    {
+        MatchData? matchData = GetMatchData();
+        MatchMap? currentMap = GetCurrentMap();
+
+        if (matchData == null || currentMap == null)
         {
             return Team.None;
+        }
+
+        MatchMember? member = MatchUtility.GetMemberFromLineup(
+            matchData,
+            player.SteamID.ToString(),
+            player.Name
+        );
+
+        if (member == null)
+        {
+            return Team.Spectator;
         }
 
         return TeamUtility.GetLineupSide(
             matchData,
             currentMap,
-            lineup_id.Value,
+            member.match_lineup_id,
             _gameServer.GetTotalRoundsPlayed()
         );
     }

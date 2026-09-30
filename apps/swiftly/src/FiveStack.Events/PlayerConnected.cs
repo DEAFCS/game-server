@@ -73,7 +73,7 @@ public partial class FiveStackPlugin
             }
         }
 
-        Team expectedTeam = match.GetExpectedTeam(player);
+        Team placementTeam = match.GetPlacementSide(match.GetExpectedTeam(player));
         int capacity = match.GetExpectedPlayerCount() / 2;
 
         // TeamUtility.GetTeamCount only checked whether the SIDE had anyone on
@@ -95,7 +95,7 @@ public partial class FiveStackPlugin
                     ),
                 player.SteamID.ToString(),
                 lineup_id,
-                (int)expectedTeam,
+                (int)placementTeam,
                 capacity
             )
         )
@@ -259,9 +259,9 @@ public partial class FiveStackPlugin
             return HookResult.Continue;
         }
 
-        Team expectedTeam = match.GetExpectedTeam(player);
+        Team placementTeam = match.GetPlacementSide(match.GetExpectedTeam(player));
 
-        if (expectedTeam != Team.None && joiningTeam != expectedTeam)
+        if (placementTeam != Team.None && joiningTeam != placementTeam)
         {
             return HookResult.Stop;
         }
