@@ -997,6 +997,13 @@ public class MatchManager
     // commands rather than typed convar writes — a convar lookup that misses or
     // comes back differently typed would silently leave the server in the wrong
     // mode.
+    //
+    // Duel is FiveStack's own 1v1 type (player count enforced separately by
+    // GetExpectedPlayerCount, not by this value) and uses native game_mode 1
+    // (Competitive), not 2 -- some compiled workshop maps carry separate
+    // entity lumps per native mode (bomb targets, spawns), and loading a
+    // non-Wingman-authored 1v1 map under native Wingman mode can activate
+    // the wrong lump (e.g. an extra func_bomb_target, mislabeled A/B radar).
     private string[] GetGameModeCommands()
     {
         if (_matchData == null)
@@ -1004,8 +1011,7 @@ public class MatchManager
             return [];
         }
 
-        int gameMode =
-            _matchData.options.type == "Duel" || _matchData.options.type == "Wingman" ? 2 : 1;
+        int gameMode = _matchData.options.type == "Wingman" ? 2 : 1;
 
         return ["game_type 0", $"game_mode {gameMode}"];
     }
