@@ -73,9 +73,11 @@ public class ReadySystem
         {
             int userId = player.UserID;
 
+            // only overwrite our own ready tags; leave team, role and camera tags alone
             if (
                 !string.IsNullOrEmpty(player.Controller.Clan)
-                && !player.Controller.Clan.EndsWith(" |")
+                && player.Controller.Clan != "ready"
+                && player.Controller.Clan != "not ready"
             )
             {
                 continue;
@@ -83,7 +85,7 @@ public class ReadySystem
 
             if (_readyStatusTimer == null)
             {
-                _matchService.GetCurrentMatch()?.UpdatePlayerName(player, player.Name);
+                _matchService.GetCurrentMatch()?.UpdatePlayerName(player, player.Controller.PlayerName);
                 continue;
             }
 
@@ -91,12 +93,12 @@ public class ReadySystem
             {
                 _matchService
                     .GetCurrentMatch()
-                    ?.UpdatePlayerName(player, player.Name, "ready");
+                    ?.UpdatePlayerName(player, player.Controller.PlayerName, "ready");
                 continue;
             }
             _matchService
                 .GetCurrentMatch()
-                ?.UpdatePlayerName(player, player.Name, "not ready");
+                ?.UpdatePlayerName(player, player.Controller.PlayerName, "not ready");
         }
     }
 

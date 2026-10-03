@@ -61,7 +61,7 @@ public partial class FiveStackPlugin
             if (PendingPlayers.ContainsKey(player.SteamID))
             {
                 role = PendingPlayers[player.SteamID];
-                player.Controller.Clan = $"[{role}]";
+                player.Controller.Clan = role;
                 player.Controller.ClanUpdated();
                 PendingPlayers.Remove(player.SteamID);
             }
