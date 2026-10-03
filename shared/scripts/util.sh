@@ -58,9 +58,16 @@ enable_steam_relay() {
 # the server without the parameter in that case.
 fetch_forced_client_names() {
   local target="$1"
-  local url="https://${API_DOMAIN}/matches/forced-client-names/${SERVER_ID}"
+  local base="${API_DOMAIN%/}"
   local tmp="${target}.tmp"
   local attempt
+
+  # The pod's API_DOMAIN already carries its scheme (https://api...); accept a bare host too.
+  case "$base" in
+    http://*|https://*) ;;
+    *) base="https://${base}" ;;
+  esac
+  local url="${base}/matches/forced-client-names/${SERVER_ID}"
 
   if [ -z "${API_DOMAIN}" ] || [ -z "${SERVER_ID}" ] || [ -z "${SERVER_API_PASSWORD}" ]; then
     echo "forced names: API_DOMAIN, SERVER_ID or SERVER_API_PASSWORD missing"
