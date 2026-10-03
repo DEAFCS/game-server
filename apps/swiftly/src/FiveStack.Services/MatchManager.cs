@@ -1361,7 +1361,7 @@ public class MatchManager
             return Team.Spectator;
         }
 
-        UpdatePlayerName(player, member.name);
+        UpdatePlayerTag(player);
 
         if (member.is_banned)
         {
@@ -1527,7 +1527,9 @@ public class MatchManager
         }
     }
 
-    public void UpdatePlayerName(IPlayer player, string name, string? tag = null)
+    // Names are set by the server itself (sv_load_forced_client_names_file, fetched
+    // in server.sh before launch); the plugin only manages the clan tag.
+    public void UpdatePlayerTag(IPlayer player, string? tag = null)
     {
         if (player == null)
         {
@@ -1537,22 +1539,6 @@ public class MatchManager
         if (player.IsFakeClient)
         {
             return;
-        }
-
-        if (string.IsNullOrEmpty(name))
-        {
-            return;
-        }
-
-        // player.Name is the engine's client name, which never reflects our rename
-        if (player.Controller.PlayerName != name)
-        {
-            player.Controller.PlayerName = name;
-            player.Controller.PlayerNameUpdated();
-
-            // force the client to update the player name; firing this unconditionally
-            // rebuilds every scoreboard on each call, which strobes under repeating timers
-            _core.GameEvent.FireToPlayer<EventNextlevelChanged>(player.Slot);
         }
 
         if (tag != null)
@@ -1569,78 +1555,6 @@ public class MatchManager
         }
 
         ClanTagUtility.Set(player.Controller, tag ?? "");
-    }
-
-    public void RestorePlayerName(IPlayer player)
-    {
-        MatchData? matchData = GetMatchData();
-        if (matchData == null || !player.IsValid || player.IsFakeClient)
-        {
-            return;
-        }
-
-        MatchMember? member = MatchUtility.GetMemberFromLineup(
-            matchData,
-            player.SteamID.ToString(),
-            player.Name
-        );
-
-        if (
-            member == null
-            || string.IsNullOrEmpty(member.name)
-            || player.Controller.PlayerName == member.name
-        )
-        {
-            return;
-        }
-
-        _logger.LogInformation(
-            $"Restoring lineup name for {player.SteamID}: {player.Controller.PlayerName} -> {member.name}"
-        );
-
-        // keep the current tag so ready, camera and role tags survive
-        UpdatePlayerName(player, member.name, player.Controller.Clan);
-    }
-
-    public void RestorePlayerNames()
-    {
-        foreach (var player in MatchUtility.Players())
-        {
-            RestorePlayerName(player);
-        }
-    }
-
-    private const float PlayerNameWatchSeconds = 5.0f;
-
-    private float _playerNameWatchUntil;
-    private bool _watchingPlayerNames;
-
-    // A few ticks after a match begins (knife / live) CS2 resets every player back to
-    // their Steam name without firing any event, so watch briefly and undo it.
-    public void WatchPlayerNames()
-    {
-        _playerNameWatchUntil = _core.Engine.GlobalVars.CurrentTime + PlayerNameWatchSeconds;
-
-        if (_watchingPlayerNames)
-        {
-            return;
-        }
-
-        _watchingPlayerNames = true;
-        WatchPlayerNamesTick();
-    }
-
-    private void WatchPlayerNamesTick()
-    {
-        if (_core.Engine.GlobalVars.CurrentTime > _playerNameWatchUntil)
-        {
-            _watchingPlayerNames = false;
-            return;
-        }
-
-        _core.Scheduler.NextTick(WatchPlayerNamesTick);
-
-        RestorePlayerNames();
     }
 
     public void SetupBroadcast()

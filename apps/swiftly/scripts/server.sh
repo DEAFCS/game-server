@@ -4,6 +4,15 @@ echo "---Prepare Server---"
 mkdir -p /root/.steam/sdk64
 cp -R "${STEAMCMD_DIR}/linux64/"* "/root/.steam/sdk64/"
 
+echo "---Fetch Forced Client Names---"
+# Done before the server starts: CS2 reads the names file once, at launch.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/util.sh"
+FORCED_NAMES_FILE="${INSTANCE_SERVER_DIR}/game/csgo/deafcs_names.txt"
+if [ "${GAME_ID}" != "740" ] && fetch_forced_client_names "${FORCED_NAMES_FILE}"; then
+    EXTRA_GAME_PARAMS="${EXTRA_GAME_PARAMS} +sv_load_forced_client_names_file deafcs_names.txt"
+fi
+
 echo "---Starting Server...--"
 cd ${INSTANCE_SERVER_DIR}
 

@@ -49,3 +49,40 @@ enable_steam_relay() {
   mv -f "$file.relay" "$file"
 }
 
+
+# Downloads the registered players' DEAFCS names as a KeyValues file for
+# +sv_load_forced_client_names_file. Must finish before CS2 starts, because
+# the server only reads the file at launch. The file is written to a temp
+# path, checked, and then moved into place, so CS2 never sees a partial file.
+# Returns non-zero (and leaves nothing behind) on any failure; callers start
+# the server without the parameter in that case.
+fetch_forced_client_names() {
+  local target="$1"
+  local url="https://${API_DOMAIN}/matches/forced-client-names/${SERVER_ID}"
+  local tmp="${target}.tmp"
+  local attempt
+
+  if [ -z "${API_DOMAIN}" ] || [ -z "${SERVER_ID}" ] || [ -z "${SERVER_API_PASSWORD}" ]; then
+    echo "forced names: API_DOMAIN, SERVER_ID or SERVER_API_PASSWORD missing"
+    return 1
+  fi
+
+  rm -f "$target" "$tmp"
+
+  for attempt in 1 2 3; do
+    if curl -fsS --max-time 8 -H "Authorization: Bearer ${SERVER_API_PASSWORD}" -o "$tmp" "$url" \
+      && head -n 1 "$tmp" | grep -q '^"Names"' \
+      && tail -n 1 "$tmp" | grep -q '^}'; then
+      mv -f "$tmp" "$target"
+      echo "forced names: ready ($(grep -c '^[[:space:]]*"[0-9]' "$target") players)"
+      return 0
+    fi
+
+    echo "forced names: attempt ${attempt} failed"
+    rm -f "$tmp"
+    sleep 2
+  done
+
+  echo "forced names: FAILED, starting without forced names"
+  return 1
+}
