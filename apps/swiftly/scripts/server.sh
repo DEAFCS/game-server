@@ -8,6 +8,7 @@ echo "---Fetch Forced Client Names---"
 # Done before the server starts: CS2 reads the names file once, at launch.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/util.sh"
+source "${SCRIPT_DIR}/crash-report.sh"
 FORCED_NAMES_FILE="${INSTANCE_SERVER_DIR}/game/csgo/deafcs_names.txt"
 if [ "${GAME_ID}" != "740" ] && fetch_forced_client_names "${FORCED_NAMES_FILE}"; then
     EXTRA_GAME_PARAMS="${EXTRA_GAME_PARAMS} +sv_load_forced_client_names_file deafcs_names.txt"
@@ -31,10 +32,4 @@ else
     GAME_ARGS=""
 fi
 
-"${SERVER_BINARY}" ${GAME_ARGS} -ip 0.0.0.0 -port ${SERVER_PORT} +tv_port ${TV_PORT} -dedicated -dev -usercon +rcon_password ${RCON_PASSWORD} ${EXTRA_GAME_PARAMS} &
-
-CS_PID=$!
-
-trap 'echo "Received signal to stop the match"; exit 0' SIGUSR1
-
-wait $CS_PID
+run_server "${SERVER_BINARY}" ${GAME_ARGS} -ip 0.0.0.0 -port ${SERVER_PORT} +tv_port ${TV_PORT} -dedicated -dev -usercon +rcon_password ${RCON_PASSWORD} ${EXTRA_GAME_PARAMS}

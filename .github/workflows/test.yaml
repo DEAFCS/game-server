@@ -8,6 +8,17 @@ on:
       - "beta"
 
 jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test crash reports
+        run: bash shared/scripts/test/crash-report.test.sh
+
+      - name: Test documented crash-report limitations
+        run: python3 shared/scripts/test/crash-report-limitations.test.py
+
   test:
     runs-on: ubuntu-latest
     strategy:
