@@ -75,6 +75,19 @@ public class EnvironmentService
         return Environment.GetEnvironmentVariable("GAME_NODE_SERVER") == "true";
     }
 
+    // Started by the panel for one match and stopped once it is over
+    public bool IsMatchServer()
+    {
+        return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MATCH_ID"));
+    }
+
+    // Opt-in: only a server explicitly started with HIBERNATE_WHEN_EMPTY=true may be
+    // handed back to hibernation. Unset, the plugin never turns it on.
+    public bool HibernateWhenEmpty()
+    {
+        return Environment.GetEnvironmentVariable("HIBERNATE_WHEN_EMPTY") == "true";
+    }
+
     public bool IsOfflineMode()
     {
         return Environment.GetEnvironmentVariable("OFFLINE_MODE") == "true";

@@ -39,7 +39,9 @@ public partial class FiveStackPlugin : BasePlugin
     private GameBackUpRounds _gameBackupRounds = null!;
     private EnvironmentService _environmentService = null!;
 
-    private CancellationTokenSource? _pingTimer;
+    private const long PingEveryMs = 15_000;
+    private EventDelegates.OnWorldUpdate? _pingHandler;
+    private long _lastPingMs;
     private Guid _chatHookId;
     private Guid _commandHookId;
     private EventDelegates.OnPrecacheResource? _precacheHandler;
@@ -99,6 +101,7 @@ public partial class FiveStackPlugin : BasePlugin
 
         MatchUtility.Initialize(Core);
         TimerUtility.Initialize(Core);
+        HibernationUtility.Initialize(Core);
 
         _environmentService = _serviceProvider.GetRequiredService<EnvironmentService>();
         _steamService = _serviceProvider.GetRequiredService<SteamService>();
@@ -195,7 +198,33 @@ public partial class FiveStackPlugin : BasePlugin
         else
         {
             _gameServer.Ping(ModuleVersion);
-            _pingTimer = TimerUtility.Repeat(15, () => _gameServer.Ping(ModuleVersion));
+            _lastPingMs = Environment.TickCount64;
+
+            // OnWorldUpdate keeps firing while the server hibernates; ticks and timers stop
+            _pingHandler = PingOnWorldUpdate;
+            Core.Event.OnWorldUpdate += _pingHandler;
+        }
+    }
+
+    private void PingOnWorldUpdate()
+    {
+        long nowMs = Environment.TickCount64;
+
+        if (!HibernationUtility.HeartbeatDue(nowMs, _lastPingMs, PingEveryMs))
+        {
+            return;
+        }
+
+        // Stamp first so a failing ping is retried in 15 s, not on every world update
+        _lastPingMs = nowMs;
+
+        try
+        {
+            _gameServer.Ping(ModuleVersion);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ping failed");
         }
     }
 
@@ -227,14 +256,32 @@ public partial class FiveStackPlugin : BasePlugin
         }
 
         UninstallConnectClientHook();
-        ClanTagUtility.Unhook();
 
-        TimerUtility.Kill(_pingTimer);
+        if (_pingHandler != null)
+        {
+            Core.Event.OnWorldUpdate -= _pingHandler;
+        }
 
-        _matchService.GetCurrentMatch()?.Reset();
+        // SwiftlyS2 only tears a plugin down once Unload returns, and a hot
+        // reload loads the new build either way: an exception here would leave
+        // this instance's timers and handlers running beside the new one.
+        try
+        {
+            ClanTagUtility.Unhook();
 
-        _ = _matchEvents.Disconnect();
+            _matchService.GetCurrentMatch()?.Reset();
+            _matchService.StayAwake(false);
 
-        TimerUtility.ClearAll();
+            _ = _matchEvents.Disconnect();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to reset match state during unload");
+        }
+        finally
+        {
+            TimerUtility.ClearAll();
+            HibernationUtility.Shutdown();
+        }
     }
 }

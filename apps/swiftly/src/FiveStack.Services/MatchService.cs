@@ -94,7 +94,7 @@ public class MatchService
         if (serverId == null || apiPassword == null)
         {
             await Task.Delay(1000 * 5);
-            _core.Scheduler.NextTick(() =>
+            HibernationUtility.NextTick(() =>
             {
                 GetMatchFromApi();
             });
@@ -118,7 +118,7 @@ public class MatchService
                 httpResponse.EnsureSuccessStatusCode();
                 string? response = await httpResponse.Content.ReadAsStringAsync();
 
-                _core.Scheduler.NextTick(() =>
+                HibernationUtility.NextTick(() =>
                 {
                     Guid? previousMatchId = _currentMatch?.GetMatchData()?.id;
                     // Only the no-show/never-connected cancellation clears a
@@ -144,6 +144,8 @@ public class MatchService
 
                         _currentMatch = null;
 
+                        StayAwake(false);
+
                         _logger.LogWarning(
                             $"No match assigned — clearing match {previousMatchId?.ToString() ?? "none"}"
                         );
@@ -156,6 +158,8 @@ public class MatchService
                     {
                         return;
                     }
+
+                    StayAwake(true);
 
                     if (previousMatchId == matchData.id)
                     {
@@ -193,6 +197,58 @@ public class MatchService
         catch (Exception ex)
         {
             _logger.LogError($"An unexpected error occurred: {ex.Message}");
+        }
+    }
+
+    private bool _heldAwake;
+
+    // A hibernating server runs no ticks, so timers and the end-of-map work
+    // would stall once everyone left. It only hibernates while it has nothing
+    // to do: it is held awake from the moment it is given a match until that
+    // match is gone.
+    public void StayAwake(bool awake)
+    {
+        try
+        {
+            var hibernate = _core.ConVar.Find<bool>("sv_hibernate_when_empty");
+
+            if (hibernate == null)
+            {
+                return;
+            }
+
+            if (awake)
+            {
+                if (hibernate.Value)
+                {
+                    // SetInternal applies now; a queued set waits for a tick
+                    hibernate.SetInternal(false);
+
+                    // A match server never hibernates. Its match can arrive
+                    // before server.cfg has turned the engine's default off,
+                    // and that default is not something to hand it back to.
+                    // DEAFCS: the deployed API does not send MATCH_ID yet, so a match server
+                    // cannot be told apart that way. Hibernation is only ever handed back to a
+                    // server that opted in with HIBERNATE_WHEN_EMPTY=true, never to the engine default.
+                    _heldAwake =
+                        !_environmentService.IsMatchServer()
+                        && _environmentService.HibernateWhenEmpty();
+                    _logger.LogInformation("holding the server awake for its match");
+                }
+
+                return;
+            }
+
+            if (_heldAwake)
+            {
+                hibernate.SetInternal(true);
+                _heldAwake = false;
+                _logger.LogInformation("no match left, the server may hibernate again");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "unable to change sv_hibernate_when_empty");
         }
     }
 
