@@ -19,6 +19,10 @@ jobs:
       - name: Resolve upstream refs
         run: bash apps/gamedata-validator/scripts/resolve-refs.sh >> "$GITHUB_ENV"
 
+      # registry names must be lowercase; the org is DEAFCS (same as plugin-build.yaml)
+      - name: Lowercase registry owner
+        run: echo "OWNER_LOWER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
@@ -36,12 +40,12 @@ jobs:
           build-args: |
             CCS_GAMEDATA_REF=${{ env.CCS_GAMEDATA_REF }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/gamedata-validator:${{ inputs.channel }}
-            ghcr.io/${{ github.repository_owner }}/gamedata-validator:${{ github.sha }}
+            ghcr.io/${{ env.OWNER_LOWER }}/gamedata-validator:${{ inputs.channel }}
+            ghcr.io/${{ env.OWNER_LOWER }}/gamedata-validator:${{ github.sha }}
           cache-from: |
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/gamedata-validator:buildcache
+            type=registry,ref=ghcr.io/${{ env.OWNER_LOWER }}/gamedata-validator:buildcache
           cache-to: |
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/gamedata-validator:buildcache,mode=max
+            type=registry,ref=ghcr.io/${{ env.OWNER_LOWER }}/gamedata-validator:buildcache,mode=max
 
       - name: Delete Package Versions
         uses: actions/delete-package-versions@v5
