@@ -6,8 +6,16 @@
 # registry.gitlab.steamos.cloud/steamrt/sniper/platform:latest-container-runtime-depot
 FROM registry.gitlab.steamos.cloud/steamrt/sniper/platform@sha256:8cd1bdfc418afd8b019a69d6f5a9305865a5f3bb5554102006fdb8f6853d5f67 AS build
 
+# Same bullseye-EOL mirror problem as the runtime stage below: deb.debian.org
+# 404s for this suite now, and archive.debian.org never carried a separate
+# bullseye-security suite of its own.
+
 # Install .NET SDK 10.0
-RUN apt-get update && \
+RUN sed -i \
+    -e 's|deb.debian.org|archive.debian.org|g' \
+    -e '/-security/d' \
+    /etc/apt/sources.list && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
     ca-certificates \
