@@ -32,11 +32,4 @@ else
     GAME_ARGS=""
 fi
 
-# BIND_IP is server.host from the API: a plain node's own public_ip normally,
-# but the protected IP for a node behind a reverse-proxy DDoS service (e.g.
-# KernelHost's Advanced DDoS Protection) -- replies must carry that address as
-# their source, or they leave via the backend's real IP instead, asymmetric
-# from what the client connected to, and the client times out after Steam
-# auth succeeds. Falls back to 0.0.0.0 (bind all, OS picks the outbound IP)
-# if unset, matching the previous hardcoded behavior.
-run_server "${SERVER_BINARY}" ${GAME_ARGS} -ip ${BIND_IP:-0.0.0.0} -port ${SERVER_PORT} +tv_port ${TV_PORT} -dedicated -dev -usercon +rcon_password ${RCON_PASSWORD} ${EXTRA_GAME_PARAMS}
+run_server "${SERVER_BINARY}" ${GAME_ARGS} -ip 0.0.0.0 -port ${SERVER_PORT} +tv_port ${TV_PORT} -dedicated -dev -usercon +rcon_password ${RCON_PASSWORD} ${EXTRA_GAME_PARAMS}
