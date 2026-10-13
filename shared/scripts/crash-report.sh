@@ -21,6 +21,9 @@ SWIFTLY_CRASH_DIR="game/csgo/addons/swiftlys2/dumps/crashreport"
 
 CONSOLE_PIPE_DIR="/tmp"
 
+# shellcheck source=freeze-watch.sh
+source "$(dirname "${BASH_SOURCE[0]}")/freeze-watch.sh"
+
 # Runs the server and, when it crashes, saves a report before the container
 # exits and takes /tmp with it. SIGUSR1 is how the panel stops a server.
 run_server() {
@@ -59,8 +62,12 @@ run_server() {
   fi
   local server_pid=$!
 
+  start_freeze_watch "$server_pid"
+
   wait "$server_pid"
   local status=$?
+
+  stop_freeze_watch
 
   # A stop that lands while the report is being written still gets its clean
   # exit, but not before the report is saved.
