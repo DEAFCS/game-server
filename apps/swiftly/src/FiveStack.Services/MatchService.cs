@@ -34,7 +34,16 @@ public class MatchService
         _localizer = localizer;
     }
 
-    public async Task GetMatchConfigs()
+    // DEAFCS deviation: setup.sh always copies these from our own
+    // shared/cfg (and the Ranked branch additionally from
+    // /opt/server-cfg) before the server ever starts, so a missing file
+    // here means setup.sh failed or the image is broken -- not something
+    // to silently paper over. Upstream 5stack fetched a missing file from
+    // raw.githubusercontent.com/5stackgg/game-server at runtime; we don't
+    // want DEAFCS servers depending on GitHub (ours or upstream's) being
+    // reachable at match time, and silently pulling upstream's unmodified
+    // config over our own would be worse than just failing loudly.
+    public Task GetMatchConfigs()
     {
         string directoryPath = Path.Join(_core.GameDirectory + "/csgo/cfg");
         foreach (
@@ -51,19 +60,14 @@ public class MatchService
         {
             if (!File.Exists(Path.Join(directoryPath, file)))
             {
-                _logger.LogInformation($"Downloading Config: {file}");
-                string url =
-                    $"https://raw.githubusercontent.com/5stackgg/game-server/main/shared/cfg/{file}";
-                var response = await HttpClientProvider.Client.GetAsync(url);
-                if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogError($"Failed to download config {file}: {response.StatusCode}");
-                    continue;
-                }
-                var content = await response.Content.ReadAsStringAsync();
-                File.WriteAllText(Path.Join(directoryPath, file), content);
+                _logger.LogCritical(
+                    $"Missing game mode config {file} -- setup.sh should have copied this in. "
+                        + "Not downloading a replacement from GitHub."
+                );
             }
         }
+
+        return Task.CompletedTask;
     }
 
     public string GetWorkshopID()
