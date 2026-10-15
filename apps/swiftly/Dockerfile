@@ -98,6 +98,8 @@ ENV PLUGINS_DIR="/opt/custom-plugins"
 
 ENV INSTALL_5STACK_PLUGIN=true
 ENV INSTALL_UTILITY_PRACTICE_PLUGIN=false
+# DEAFCS: node plugins a practice server never loads (skins stay off practice).
+ENV UTILITY_PRACTICE_SKIP_PLUGINS="InventorySimulator"
 
 ENV GAME_ID="730"
 ENV GAME_PARAMS=""

@@ -19,6 +19,12 @@ jobs:
       - name: Test documented crash-report limitations
         run: python3 shared/scripts/test/crash-report-limitations.test.py
 
+      - name: Test practice HUD workshop addons
+        run: bash shared/scripts/test/workshop-addons.test.sh
+
+      - name: Test practice server node plugins
+        run: bash shared/scripts/test/practice-plugins.test.sh
+
   test:
     runs-on: ubuntu-latest
     strategy:

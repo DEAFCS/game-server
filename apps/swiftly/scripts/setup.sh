@@ -211,6 +211,22 @@ if [ "${INSTALL_UTILITY_PRACTICE_PLUGIN:-false}" = "true" ]; then
   esac
 fi
 
+# DEAFCS: a practice server keeps the node's DEAFCS plugins (accessibility:
+# DeafCS.DisableValvePremute, Mutesound) but never loads the ones named in
+# UTILITY_PRACTICE_SKIP_PLUGINS (skins, by default). Upstream gets the same
+# result from its plugin index, which DEAFCS nodes do not have. Only the
+# instance's own link is removed, never anything on the node volume: a link
+# whose parent is itself a link is left alone.
+if [ "${INSTALL_UTILITY_PRACTICE_PLUGIN:-false}" = "true" ]; then
+  for skipped_plugin in ${UTILITY_PRACTICE_SKIP_PLUGINS:-}; do
+    skipped_link="${INSTANCE_SERVER_DIR}/game/csgo/addons/swiftlys2/plugins/${skipped_plugin}"
+    if [ -L "$skipped_link" ] && [ ! -L "$(dirname "$skipped_link")" ]; then
+      rm -f "$skipped_link"
+      echo "---Utility Practice: not loading ${skipped_plugin} on a practice server---"
+    fi
+  done
+fi
+
 # The practice HUD's addon, and every addon the plugins this server loads list
 # in the catalog -- the panel sends those as WORKSHOP_ADDONS. AddonsManager only
 # runs when there is something to serve, so a server whose plugins ship no
