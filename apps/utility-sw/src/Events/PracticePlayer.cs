@@ -1,0 +1,229 @@
+using SwiftlyS2.Shared.GameEventDefinitions;
+using SwiftlyS2.Shared.GameEvents;
+using SwiftlyS2.Shared.Misc;
+using SwiftlyS2.Shared.Players;
+using SwiftlyS2.Shared.SchemaDefinitions;
+using static SwiftlyS2.Shared.Helper;
+
+namespace UtilityPractice;
+
+public partial class UtilityPracticePlugin
+{
+    // Practising smokes through your own flash is nobody's idea of practice.
+    // Joining a team is the moment somebody is actually in the server and
+    // able to read chat -- connect is too early, and a practice server whose
+    // commands nobody knows about is a practice server nobody can use.
+    [GameEventHandler(HookMode.Post)]
+    public HookResult OnPlayerJoinTeam(EventPlayerTeam @event)
+    {
+        IPlayer? player = @event.UserIdPlayer;
+
+        if (player == null || !player.IsValid || player.IsFakeClient)
+        {
+            return HookResult.Continue;
+        }
+
+        ulong steamId = player.SteamID;
+
+        // Once per connection, not once per team change: switching sides to
+        // line something up should not re-print the menu every time.
+        if (!_welcomed.Add(steamId))
+        {
+            return HookResult.Continue;
+        }
+
+        Core.Scheduler.DelayBySeconds(
+            WelcomeDelaySeconds,
+            () =>
+            {
+                foreach (string line in UseHud(steamId) ? WelcomeLines : TypedWelcomeLines)
+                {
+                    Tell(steamId, line);
+                }
+            }
+        );
+
+        return HookResult.Continue;
+    }
+
+    // The ping key, because that is where every other practice server put it
+    // and because clearing is the one thing you want BETWEEN two attempts --
+    // the moment chat is worst at. The smoke in the way is in front of you now,
+    // not after you have typed six characters into it.
+    [GameEventHandler(HookMode.Post)]
+    public HookResult OnPlayerPing(EventPlayerPing @event)
+    {
+        IPlayer? player = @event.UserIdPlayer;
+
+        if (player == null || !player.IsValid || player.IsFakeClient)
+        {
+            return HookResult.Continue;
+        }
+
+        int cleared = ClearUtility();
+
+        // Silent when there was nothing to clear: a ping is also just a ping.
+        if (cleared > 0)
+        {
+            Tell(player.SteamID, $" {ChatColors.Green}cleared {ChatColors.Grey}the utility in the world");
+        }
+
+        return HookResult.Continue;
+    }
+
+    [GameEventHandler(HookMode.Post)]
+    public HookResult OnPlayerBlind(EventPlayerBlind @event)
+    {
+        // Read before anything is done about it: NoFlash zeroes the duration,
+        // and a flash you cannot measure is a flash you cannot practise.
+        float duration = @event.BlindDuration;
+
+        IPlayer? blinded = @event.UserIdPlayer;
+        IPlayer? thrower = @event.AttackerPlayer;
+
+        if (duration > 0f && blinded != null && blinded.IsValid)
+        {
+            bool carded =
+                thrower != null
+                && thrower.IsValid
+                && !thrower.IsFakeClient
+                && FlashCardFor(thrower.SteamID);
+            bool own = thrower != null && thrower.IsValid && thrower.SteamID == blinded.SteamID;
+
+            // On the card, everybody it caught is a row, the thrower included.
+            // Without the card it is a line in chat for each.
+            if (carded)
+            {
+                RecordFlash(thrower!, blinded, @event.UserIdPawn, duration);
+            }
+            else if (blinded.IsFakeClient)
+            {
+                ReportFlash(thrower, duration, "a bot");
+            }
+            else if (thrower != null && thrower.IsValid && !own)
+            {
+                ReportFlash(thrower, duration, blinded.Controller.PlayerName);
+            }
+
+            // NoFlash below zeroes the blindness, so the screen never goes
+            // white and the number IS the feedback: "how long would that have
+            // had me" is the whole question a flash lineup asks. Somebody
+            // whose own card just said so is not told twice.
+            if (!blinded.IsFakeClient && !(carded && own))
+            {
+                ReportFlash(blinded, duration, "you");
+            }
+        }
+
+        if (!_config.NoFlash)
+        {
+            return HookResult.Continue;
+        }
+
+        CCSPlayerPawn? pawn = @event.UserIdPawn;
+
+        if (pawn == null || !pawn.IsValid)
+        {
+            return HookResult.Continue;
+        }
+
+        pawn.FlashDuration = 0f;
+
+        return HookResult.Continue;
+    }
+
+    // What a grenade actually did to a bot, which is the only reason to have
+    // put one there. Reported to the thrower, in chat, because it is a number
+    // to compare against the last attempt rather than something to read at a
+    // glance mid-throw.
+    [GameEventHandler(HookMode.Post)]
+    public HookResult OnPlayerHurt(EventPlayerHurt @event)
+    {
+        IPlayer? hurt = @event.UserIdPlayer;
+        IPlayer? attacker = @event.AttackerPlayer;
+
+        if (hurt == null || !hurt.IsValid || attacker == null || !attacker.IsValid || attacker.IsFakeClient)
+        {
+            return HookResult.Continue;
+        }
+
+        string weapon = @event.Weapon ?? "";
+
+        // On the card, everybody a fire reached is a row, the thrower included,
+        // and the per-tick damage lines stay out of chat.
+        bool carded = weapon.Contains("inferno") && FlashCardFor(attacker.SteamID);
+
+        if (carded)
+        {
+            RecordBurn(attacker, hurt);
+        }
+
+        if (!hurt.IsFakeClient)
+        {
+            return HookResult.Continue;
+        }
+
+        // Bullets are not what this server is for, and a bot being shot would
+        // fill the chat with numbers nobody asked for.
+        if (!weapon.Contains("grenade") && !weapon.Contains("molotov") && !weapon.Contains("inferno"))
+        {
+            return HookResult.Continue;
+        }
+
+        // The RAW damage, deliberately -- the opposite of what the match plugin
+        // reports. There, overkill must not be credited to a player's stats.
+        // Here the question is "what would this grenade do to somebody", and
+        // clamping it to what was left of a half-dead bot answers a question
+        // about the bot instead of about the throw.
+        int dealt = @event.ActualDmgHealth;
+
+        if (!carded)
+        {
+            Tell(
+                attacker.SteamID,
+                $" {ChatColors.Default}{dealt} {ChatColors.Grey}damage to a bot "
+                    + $"{ChatColors.Default}({Friendly(weapon)})"
+            );
+        }
+
+        // Topped back up so the next throw is measured against the same target.
+        // Without this a second HE onto a hurt bot reads lower than the first
+        // and the two numbers cannot be compared, which is the only reason to
+        // have put a bot there.
+        CCSPlayerPawn? pawn = hurt.PlayerPawn;
+
+        if (pawn != null && pawn.IsValid && @event.ActualHealth > 0)
+        {
+            pawn.Health = BotFullHealth;
+        }
+
+        return HookResult.Continue;
+    }
+
+    private const int BotFullHealth = 100;
+
+    private void ReportFlash(IPlayer? told, float duration, string who)
+    {
+        if (told == null || !told.IsValid || told.IsFakeClient)
+        {
+            return;
+        }
+
+        Tell(
+            told.SteamID,
+            $" {ChatColors.Default}{duration:0.00}s {ChatColors.Grey}of flash on {who}"
+        );
+    }
+
+    private static string Friendly(string weapon)
+    {
+        return weapon switch
+        {
+            "hegrenade" => "he",
+            "molotov" => "molotov",
+            "incgrenade" => "incendiary",
+            "inferno" => "fire",
+            _ => weapon,
+        };
+    }
+}
