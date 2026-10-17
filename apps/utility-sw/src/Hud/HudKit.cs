@@ -137,6 +137,9 @@ public class HudKit
     {
         int resent = 0;
 
+        // A snapshot: re-showing on a respawned entity replaces entries.
+        var visible = new List<(IPlayer player, string layout, Open open)>();
+
         foreach (KeyValuePair<int, Dictionary<string, Open>> viewer in _open)
         {
             IPlayer? player = _core.PlayerManager.GetPlayer(viewer.Key);
@@ -148,48 +151,72 @@ public class HudKit
 
             foreach (KeyValuePair<string, Open> entry in viewer.Value)
             {
-                Open open = entry.Value;
-
-                if (!open.Visible || !open.Surface.Layout.IsValid)
+                if (entry.Value.Visible)
                 {
-                    continue;
+                    visible.Add((player, entry.Key, entry.Value));
                 }
-
-                bool lost;
-
-                try
-                {
-                    lost = open.Surface.EngineLost();
-                }
-                catch (Exception exception)
-                {
-                    _logger.LogWarning(exception, "could not read hud state for player {Player}", viewer.Key);
-
-                    continue;
-                }
-
-                if (!_heal.ShouldResend(viewer.Key, entry.Key, lost, nowSeconds))
-                {
-                    continue;
-                }
-
-                _logger.LogInformation(
-                    "hud layout {Layout} lost its state for player {Player}; sending it again",
-                    entry.Key,
-                    viewer.Key
-                );
-
-                open.Surface.Invalidate();
-                open.Template.Apply(open.Surface);
-                open.Surface.Show(true);
-
-                if (open.Template.CapturesInput)
-                {
-                    open.Surface.Input(true);
-                }
-
-                resent++;
             }
+        }
+
+        foreach ((IPlayer player, string layout, Open open) in visible)
+        {
+            int slot = player.PlayerID;
+
+            // The entity itself is gone (a cleanup took it): Show spawns a new
+            // one and, being a new wrapper, starts the surface over.
+            if (!open.Surface.Layout.IsValid)
+            {
+                if (_heal.ShouldResend(slot, layout, lost: true, nowSeconds))
+                {
+                    _logger.LogInformation(
+                        "hud layout {Layout} entity went away under player {Player}; spawning it again",
+                        layout,
+                        slot
+                    );
+
+                    if (Show(player, open.Template))
+                    {
+                        resent++;
+                    }
+                }
+
+                continue;
+            }
+
+            bool lost;
+
+            try
+            {
+                lost = open.Surface.EngineLost();
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "could not read hud state for player {Player}", slot);
+
+                continue;
+            }
+
+            if (!_heal.ShouldResend(slot, layout, lost, nowSeconds))
+            {
+                continue;
+            }
+
+            _logger.LogInformation(
+                "hud layout {Layout} lost its state for player {Player}; sending it again",
+                layout,
+                slot
+            );
+
+            open.Surface.Invalidate();
+            open.Template.Apply(open.Surface);
+            open.Surface.Show(true);
+
+            if (open.Template.CapturesInput)
+            {
+                open.Surface.Input(true);
+            }
+
+            resent++;
         }
 
         return resent;
