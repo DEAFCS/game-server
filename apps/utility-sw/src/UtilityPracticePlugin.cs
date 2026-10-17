@@ -86,6 +86,7 @@ public partial class UtilityPracticePlugin : BasePlugin
     private EventDelegates.OnClientDisconnected? _disconnectHandler;
     private EventDelegates.OnPrecacheResource? _precacheHandler;
     private EventDelegates.OnClientSteamAuthorize? _authorizeHandler;
+    private EventDelegates.OnClientPutInServer? _putInServerHandler;
     private EventDelegates.OnCustomHudClicked? _hudClickHandler;
 
     public UtilityPracticePlugin(ISwiftlyCore core)
@@ -261,6 +262,11 @@ public partial class UtilityPracticePlugin : BasePlugin
             _occupancyDirty = true;
             _prompt?.Cancel(@event.PlayerId);
             _replay.ForgetViewer(@event.PlayerId);
+            // The slot's HUD cache goes whoever it was: left to ForPlayer below,
+            // a leaver the engine had already let go of kept it, and whoever
+            // took the slot next -- the same player reconnecting included --
+            // was sent nothing the cache thought they already had.
+            _hud?.Forget(@event.PlayerId);
 
             ForPlayer(
                 @event.PlayerId,
@@ -287,6 +293,16 @@ public partial class UtilityPracticePlugin : BasePlugin
             _occupancyDirty = true;
         };
         Core.Event.OnClientSteamAuthorize += _authorizeHandler;
+
+        // A fresh arrival in a slot holds no HUD, whatever the slot's last
+        // occupant left behind here: disconnect cleanup is best effort (see
+        // above), so the slot and the player's own HUD state start over here.
+        _putInServerHandler = @event =>
+        {
+            _hud?.Forget(@event.PlayerId);
+            ForPlayer(@event.PlayerId, steamId => ForgetHud(steamId, @event.PlayerId));
+        };
+        Core.Event.OnClientPutInServer += _putInServerHandler;
 
         InitializeConnectClientHook();
         InitializeTerminateRoundHook();
@@ -490,6 +506,11 @@ public partial class UtilityPracticePlugin : BasePlugin
         if (_authorizeHandler != null)
         {
             Core.Event.OnClientSteamAuthorize -= _authorizeHandler;
+        }
+
+        if (_putInServerHandler != null)
+        {
+            Core.Event.OnClientPutInServer -= _putInServerHandler;
         }
 
         UninstallConnectClientHook();
@@ -747,6 +768,76 @@ public partial class UtilityPracticePlugin : BasePlugin
         }
     }
 
+    // More bots on the teams than were placed: see PracticeBotRoster. Never
+    // while a discovery or a render owns the server -- their bots are theirs.
+    private void TrimSurplusBots()
+    {
+        if (_discovery.IsBusy || _config.RenderMode)
+        {
+            return;
+        }
+
+        var onTeams = new Dictionary<int, IPlayer>();
+
+        foreach (IPlayer player in Core.PlayerManager.GetAllPlayers())
+        {
+            if (player != null && player.IsValid && player.IsFakeClient && player.Controller.Team is Team.CT or Team.T)
+            {
+                onTeams[player.PlayerID] = player;
+            }
+        }
+
+        IReadOnlyList<int> surplus = PracticeBotRoster.Surplus(onTeams.Keys, _bots.Count);
+
+        if (surplus.Count == 0)
+        {
+            return;
+        }
+
+        // The quota first, or the engine refills the slots as they empty.
+        Core.Engine.ExecuteCommand($"bot_quota {_bots.Count}");
+
+        foreach (int slot in surplus)
+        {
+            onTeams[slot].Kick("", SwiftlyS2.Shared.ProtobufDefinitions.ENetworkDisconnectionReason.NETWORK_DISCONNECT_KICKED);
+        }
+
+        _logger.LogWarning(
+            "{extra} bot(s) joined past the {placed} placed (quota {quota}, mode {mode}); removed them",
+            surplus.Count,
+            _bots.Count,
+            ConVarText("bot_quota"),
+            ConVarText("bot_quota_mode")
+        );
+    }
+
+    // For the log line above only: what the engine thought it was doing.
+    private string ConVarText(string name)
+    {
+        try
+        {
+            string? text = Core.ConVar.Find<string>(name)?.Value;
+
+            if (text != null)
+            {
+                return text;
+            }
+        }
+        catch
+        {
+            // Not a string convar; try it as a number.
+        }
+
+        try
+        {
+            return Core.ConVar.Find<int>(name)?.Value.ToString() ?? "?";
+        }
+        catch
+        {
+            return "?";
+        }
+    }
+
     // Every slot is a person or a bot, so a small server runs out sooner.
     public int BotSlotsLeft()
     {
@@ -780,6 +871,8 @@ public partial class UtilityPracticePlugin : BasePlugin
 
             return;
         }
+
+        TrimSurplusBots();
 
         // Out of time: the slow path that was the only path still gets there.
         if (_aimTick > _botsDueBy)
@@ -907,6 +1000,8 @@ public partial class UtilityPracticePlugin : BasePlugin
         {
             return;
         }
+
+        TrimSurplusBots();
 
         foreach (IPlayer player in Core.PlayerManager.GetAllPlayers())
         {
@@ -1898,6 +1993,7 @@ public partial class UtilityPracticePlugin : BasePlugin
         DrainLibraryLoads();
         DrainPendingMapLoad();
         KeepWorldsCurrent();
+        _hud?.Heal((int)(Environment.TickCount64 / 1000));
     }
 
     // Nobody stays dead on a practice server. Rejoining while dead, falling off

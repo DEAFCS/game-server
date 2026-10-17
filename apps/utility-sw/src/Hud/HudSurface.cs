@@ -1,4 +1,5 @@
 using FiveStack.Utilities;
+using SwiftlyS2.Shared.Natives;
 using SwiftlyS2.Shared.SchemaDefinitions;
 
 namespace UtilityPractice;
@@ -11,10 +12,7 @@ public class HudSurface
     private readonly CCSCustomHudLayout _layout;
     private readonly HudLayoutSlots _slots;
     private readonly int _playerId;
-
-    private readonly Dictionary<string, string> _variables = new();
-    private readonly Dictionary<(string, string), bool> _classes = new();
-    private readonly Dictionary<(string, string), int> _moved = new();
+    private readonly HudDiffCache _sent = new();
 
     public HudSurface(CCSCustomHudLayout layout, HudLayoutSlots slots, int playerId)
     {
@@ -27,25 +25,21 @@ public class HudSurface
 
     public void Set(string name, string value)
     {
-        if (_variables.TryGetValue(name, out string? showing) && showing == value)
+        if (!_sent.Variable(name, value))
         {
             return;
         }
 
-        _variables[name] = value;
         _layout.SetDialogVariableStringForPlayer(_playerId, _slots.ElementFor(name), name, value);
     }
 
     public void Class(string elementId, string name, bool on)
     {
-        (string, string) key = (elementId, name);
-
-        if (_classes.TryGetValue(key, out bool was) && was == on)
+        if (!_sent.Class(elementId, name, on))
         {
             return;
         }
 
-        _classes[key] = on;
         _layout.SetHasClassForPlayer(
             _playerId,
             elementId,
@@ -79,19 +73,16 @@ public class HudSurface
     // one element -- each keeps its own idea of where the thing is.
     public void Move(string elementId, string prefix, int index)
     {
-        (string, string) key = (elementId, prefix);
-
-        if (_moved.TryGetValue(key, out int was))
+        if (!_sent.Move(elementId, prefix, index, out int? left))
         {
-            if (was == index)
-            {
-                return;
-            }
-
-            Class(elementId, $"{prefix}{was}", false);
+            return;
         }
 
-        _moved[key] = index;
+        if (left != null)
+        {
+            Class(elementId, $"{prefix}{left}", false);
+        }
+
         Class(elementId, $"{prefix}{index}", true);
     }
 
@@ -110,8 +101,64 @@ public class HudSurface
     // has to be dropped or every unchanged value is suppressed forever.
     public void Invalidate()
     {
-        _variables.Clear();
-        _classes.Clear();
-        _moved.Clear();
+        _sent.Invalidate();
+    }
+
+    // Whether the engine has dropped this slot's state under us: the cache says
+    // the root was shown and the entity no longer says so.
+    public bool EngineLost()
+    {
+        return HudHeal.Lost(_sent.Holds(_slots.RootId, HudSlots.Shown), EngineShown());
+    }
+
+    // Looked up by PlayerSlot rather than by vector index: nothing promises the
+    // engine keeps one entry per slot in slot order, and reading another
+    // player's entry would heal the wrong surface or none.
+    private bool? EngineShown()
+    {
+        int panel = IndexOf(_layout.PanelIds, _slots.RootId);
+        int name = IndexOf(_layout.ClassNames, HudSlots.Shown);
+
+        if (panel < 0 || name < 0)
+        {
+            return null;
+        }
+
+        CUtlVector<CCSCustomHudLayoutState> states = _layout.PlayerLayoutStates;
+
+        for (int i = 0; i < states.Count; i++)
+        {
+            CCSCustomHudLayoutState state = states[i];
+
+            if (state.PlayerSlot != (uint)_playerId)
+            {
+                continue;
+            }
+
+            foreach (HUDPanelHasClass_t has in state.HasClasses)
+            {
+                if (has.PanelIdIndex == panel && has.ClassNameIndex == name)
+                {
+                    return has.ClassStatus == EHudPanelClassStatus_t.k_eHudPanelClassStatus_HasClass;
+                }
+            }
+
+            return null;
+        }
+
+        return null;
+    }
+
+    private static int IndexOf(CUtlVector<CUtlString> names, string wanted)
+    {
+        for (int i = 0; i < names.Count; i++)
+        {
+            if (names[i] == wanted)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 }

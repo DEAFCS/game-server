@@ -118,6 +118,81 @@ public class HudKit
     public void Forget(int playerId)
     {
         _open.Remove(playerId);
+        _heal.Forget(playerId);
+    }
+
+    private readonly HudHeal _heal = new();
+
+    /// <summary>
+    /// Resends every visible surface whose state the engine has dropped. Run
+    /// once a second; answers how many were resent.
+    ///
+    /// The engine keeps each player's overrides on the layout entity by slot,
+    /// and the per-surface cache here goes on suppressing every value it thinks
+    /// the client already holds. When the two part -- the engine let a slot's
+    /// state go, or kept it for a slot that changed hands -- the HUD stays blank
+    /// and the wheel empty until the game server restarts. This puts it back.
+    /// </summary>
+    public int Heal(int nowSeconds)
+    {
+        int resent = 0;
+
+        foreach (KeyValuePair<int, Dictionary<string, Open>> viewer in _open)
+        {
+            IPlayer? player = _core.PlayerManager.GetPlayer(viewer.Key);
+
+            if (player == null || !player.IsValid || player.IsFakeClient)
+            {
+                continue;
+            }
+
+            foreach (KeyValuePair<string, Open> entry in viewer.Value)
+            {
+                Open open = entry.Value;
+
+                if (!open.Visible || !open.Surface.Layout.IsValid)
+                {
+                    continue;
+                }
+
+                bool lost;
+
+                try
+                {
+                    lost = open.Surface.EngineLost();
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogWarning(exception, "could not read hud state for player {Player}", viewer.Key);
+
+                    continue;
+                }
+
+                if (!_heal.ShouldResend(viewer.Key, entry.Key, lost, nowSeconds))
+                {
+                    continue;
+                }
+
+                _logger.LogInformation(
+                    "hud layout {Layout} lost its state for player {Player}; sending it again",
+                    entry.Key,
+                    viewer.Key
+                );
+
+                open.Surface.Invalidate();
+                open.Template.Apply(open.Surface);
+                open.Surface.Show(true);
+
+                if (open.Template.CapturesInput)
+                {
+                    open.Surface.Input(true);
+                }
+
+                resent++;
+            }
+        }
+
+        return resent;
     }
 
     // Called on unload, INCLUDING a hot reload. Without this the entities outlive
@@ -183,6 +258,7 @@ public class HudKit
         _retryAfter.Clear();
         _warned.Clear();
         _open.Clear();
+        _heal.Reset();
     }
 
     public void OnClicked(IOnCustomHudClickedEvent @event)
@@ -254,7 +330,10 @@ public class HudKit
 
         if (layouts.TryGetValue(slots.Layout, out Open? open))
         {
-            if (open.EntityIndex == entity.Index)
+            // The same wrapper, not just the same index: a respawned layout can
+            // be handed the index the old one freed, and matching on the index
+            // alone kept the old surface and its cache of what the client holds.
+            if (open.EntityIndex == entity.Index && ReferenceEquals(open.Surface.Layout, entity))
             {
                 return open;
             }
