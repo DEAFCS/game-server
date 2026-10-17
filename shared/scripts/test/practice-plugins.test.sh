@@ -100,6 +100,28 @@ assert_present "$workdir/node/addons/swiftlys2/plugins/InventorySimulator/Invent
   "the skins plugin was deleted from the node volume through a linked plugins directory"
 teardown
 
+PRACTICE_CFG_BLOCK="$(sed -n '/^if \[ "\$SERVER_TYPE" = "Practice" \]; then/,/^fi/p' \
+  "${REPO_DIR}/apps/swiftly/scripts/setup.sh")"
+
+echo "a practice server is relay only: no ICE, no hibernation"
+if [ -z "$PRACTICE_CFG_BLOCK" ]; then
+  fail "setup.sh has no practice server.cfg block"
+fi
+setup
+BASE_SERVER_DIR="$workdir/base"
+INSTANCE_SERVER_DIR="$workdir/instance"
+mkdir -p "$BASE_SERVER_DIR/game/csgo/cfg" "$INSTANCE_SERVER_DIR/game/csgo/cfg"
+echo "hostname base" > "$BASE_SERVER_DIR/game/csgo/cfg/server.cfg"
+SERVER_TYPE=Practice eval "$PRACTICE_CFG_BLOCK"
+cfg="$INSTANCE_SERVER_DIR/game/csgo/cfg/server.cfg"
+grep -qx "net_option P2P_Transport_ICE_Enable 0" "$cfg" || fail "the practice server.cfg still allows ICE"
+grep -qx "sv_hibernate_when_empty 0" "$cfg" || fail "the practice server.cfg lost hibernation off"
+grep -qx "hostname base" "$cfg" || fail "the practice server.cfg dropped the base server.cfg"
+grep -qx "hostname base" "$BASE_SERVER_DIR/game/csgo/cfg/server.cfg" && \
+  ! grep -q "P2P_Transport_ICE_Enable" "$BASE_SERVER_DIR/game/csgo/cfg/server.cfg" || \
+  fail "the base server.cfg on the node was written to"
+teardown
+
 if [ "$failures" -gt 0 ]; then
   echo "$failures assertion(s) failed" >&2
   exit 1

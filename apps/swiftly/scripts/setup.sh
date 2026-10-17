@@ -67,6 +67,10 @@ if [ "$SERVER_TYPE" = "Practice" ]; then
     cp "$BASE_SERVER_DIR/game/csgo/cfg/server.cfg" "$INSTANCE_SERVER_DIR/game/csgo/cfg/server.cfg"
   fi
   printf '\nsv_hibernate_when_empty 0\n' >> "$INSTANCE_SERVER_DIR/game/csgo/cfg/server.cfg"
+  # DEAFCS: relay only, like ranked/public server.cfg (bda724a). A practice
+  # server copies the base server.cfg instead, so it needs the same line to
+  # share no ICE candidates and never hand out the node's real IP.
+  printf 'net_option P2P_Transport_ICE_Enable 0\n' >> "$INSTANCE_SERVER_DIR/game/csgo/cfg/server.cfg"
 fi
 
 if [ ! -d "/opt/custom-plugins/addons/swiftlys2/configs" ]; then
