@@ -399,7 +399,7 @@ public partial class UtilityPracticePlugin
         return new NadeBarTemplate.Key?[]
         {
             new NadeBarTemplate.Key("Menu"),
-            UseKey(steamId, at, cleared),
+            UseKey(steamId, pawn, at, cleared),
             new NadeBarTemplate.Key(reload, zoomed || following),
             new NadeBarTemplate.Key("Add a bot here"),
             new NadeBarTemplate.Key(noclip ? "Noclip · on" : "Noclip", noclip),
@@ -437,32 +437,40 @@ public partial class UtilityPracticePlugin
     // What use would do if it were pressed now, in the order UsePressed
     // decides it. With nothing for it to do, the row stays and dims: the key
     // is still worth knowing about.
-    private NadeBarTemplate.Key UseKey(ulong steamId, Vec3 at, bool cleared)
+    // The order and labels live in PracticeUseKey (shared, tested); this only
+    // gathers what E would see. DEAFCS: the spawn step uses the same chooser
+    // and eye angles E does, so the row lights beside a spawn E will snap to.
+    private NadeBarTemplate.Key UseKey(ulong steamId, CCSPlayerPawn pawn, Vec3 at, bool cleared)
     {
         if (cleared)
         {
-            return new NadeBarTemplate.Key("Snap onto a spot nearby", Dim: true);
+            PracticeUseKey.Row hidden = PracticeUseKey.Describe(true, null, 0, null, -1);
+
+            return new NadeBarTemplate.Key(hidden.Label, Dim: hidden.Dim);
         }
 
         IReadOnlyList<LineupRecord> library = Shown(steamId);
         List<LineupRecord> here = PracticeReplay.SpotAt(library, at);
 
-        if (CanCycle(steamId, here, at))
-        {
-            int index = here.IndexOf(_system.StateFor(steamId).Loaded!);
-
-            return new NadeBarTemplate.Key($"Next throw from here · {index + 1} of {here.Count}");
-        }
+        int? cycleIndex = CanCycle(steamId, here, at)
+            ? here.IndexOf(_system.StateFor(steamId).Loaded!)
+            : null;
 
         LineupRecord? nearest = Nearest(library, at);
-        float away = nearest == null ? float.MaxValue : Flat(nearest.release.feet_position, at);
+        float? lineupAway = nearest == null ? null : Flat(nearest.release.feet_position, at);
 
-        // In reach and not already on it: use finishes the walk.
-        if (away <= UseReachUnits && away > PracticeLineupUtility.StanceToleranceUnits)
+        int spawn = -1;
+
+        if (cycleIndex == null && _replay.SpawnsShown)
         {
-            return new NadeBarTemplate.Key("Snap onto the spot");
+            List<ThrowSnapshot> spawns = _system.SpawnPoints();
+            QAngle eyes = pawn.EyeAngles;
+
+            spawn = PracticeSpawnSnap.Choose(at, eyes.Y, eyes.X, spawns, (eye, point) => _replay.Sees(eye, point));
         }
 
-        return new NadeBarTemplate.Key("Snap onto a spot nearby", Dim: true);
+        PracticeUseKey.Row row = PracticeUseKey.Describe(false, cycleIndex, here.Count, lineupAway, spawn);
+
+        return new NadeBarTemplate.Key(row.Label, Dim: row.Dim);
     }
 }
