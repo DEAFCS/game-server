@@ -48,6 +48,11 @@ public class MapCalloutsReporter
         _logger = logger;
     }
 
+    // DEAFCS: the last map actually reported and what its places were. Kept
+    // through Reset on purpose -- the next map's first walk is compared to it.
+    private string _previousMap = string.Empty;
+    private string _previousSignature = string.Empty;
+
     public void Reset()
     {
         _reported = string.Empty;
@@ -165,8 +170,23 @@ public class MapCalloutsReporter
             return;
         }
 
+        // The map changed but the places did not: the walk read the map being
+        // left (see MapCalloutsGuard). Treated like "not spawned yet" -- asked
+        // again next second -- rather than sent under the new map's name.
+        if (MapCalloutsGuard.IsLeftover(mapName, callouts, _previousMap, _previousSignature))
+        {
+            _logger.LogInformation(
+                "callouts read on {map} are still {previous}'s; asking again",
+                mapName,
+                _previousMap
+            );
+            return;
+        }
+
         _cached = callouts;
         _reported = mapName;
+        _previousMap = mapName;
+        _previousSignature = MapCalloutsGuard.Signature(callouts);
         _ = Task.Run(async () => await _api.Callouts(mapName, callouts));
     }
 }
