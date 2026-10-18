@@ -13,4 +13,9 @@ public class PracticeSessionData
 
     // Null unless the panel has loaded an execute onto this session.
     public UtilityPlaybook? playbook { get; set; }
+
+    // DEAFCS: InventorySimulator's settings, from the Competitive server cfg a
+    // match server execs. Empty from a panel that does not send them.
+    public List<PracticeServerSetting> inventory_settings { get; set; } =
+        new List<PracticeServerSetting>();
 }

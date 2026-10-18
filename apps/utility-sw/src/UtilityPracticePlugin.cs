@@ -2687,6 +2687,8 @@ public partial class UtilityPracticePlugin : BasePlugin
 
     private void OnSessionRefreshed(PracticeSessionData session)
     {
+        ApplyInventorySettings(session);
+
         if (string.IsNullOrEmpty(session.password))
         {
             _logger.LogWarning(
@@ -2896,6 +2898,42 @@ public partial class UtilityPracticePlugin : BasePlugin
         {
             TrySetConVar("sv_password", session.password);
         }
+    }
+
+    // DEAFCS: point InventorySimulator at the DEAFCS inventory service, as a
+    // match server's Competitive cfg does (PracticeInventory). The session is
+    // fetched on every map load, before anyone is handed a connect string, so
+    // the plugin knows where to look before a player's inventory is fetched.
+    // A render server does not load the plugin (UTILITY_RENDER_SKIP_PLUGINS).
+    private void ApplyInventorySettings(PracticeSessionData session)
+    {
+        if (_config.RenderMode)
+        {
+            return;
+        }
+
+        List<string> commands = PracticeInventory.Commands(session.inventory_settings);
+
+        if (commands.Count == 0)
+        {
+            return;
+        }
+
+        List<string> names = PracticeInventory.Names(session.inventory_settings);
+
+        Core.Scheduler.NextTick(() =>
+        {
+            foreach (string command in commands)
+            {
+                Core.Engine.ExecuteCommand(command);
+            }
+
+            // Names only: the service key is one of these settings.
+            _logger.LogInformation(
+                "inventory settings applied: {names}",
+                string.Join(", ", names)
+            );
+        });
     }
 
     private bool TrySetConVar(string name, string value)

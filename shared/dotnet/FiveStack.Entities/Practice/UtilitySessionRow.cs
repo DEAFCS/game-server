@@ -19,6 +19,9 @@ public class UtilitySessionRow
     public List<string>? allowed_steam_ids { get; set; }
     public UtilityPlaybook? playbook { get; set; }
 
+    // DEAFCS: InventorySimulator's settings (PracticeInventory).
+    public List<PracticeServerSetting>? inventory_settings { get; set; }
+
     public PracticeSessionData ToSession()
     {
         return new PracticeSessionData
@@ -29,6 +32,7 @@ public class UtilitySessionRow
             map = map_name ?? map ?? "",
             allowed_steam_ids = steam_ids ?? allowed_steam_ids ?? new List<string>(),
             playbook = playbook,
+            inventory_settings = inventory_settings ?? new List<PracticeServerSetting>(),
         };
     }
 
