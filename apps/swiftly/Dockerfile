@@ -98,8 +98,12 @@ ENV PLUGINS_DIR="/opt/custom-plugins"
 
 ENV INSTALL_5STACK_PLUGIN=true
 ENV INSTALL_UTILITY_PRACTICE_PLUGIN=false
-# DEAFCS: node plugins a practice server never loads (skins stay off practice).
-ENV UTILITY_PRACTICE_SKIP_PLUGINS="InventorySimulator"
+# DEAFCS: node plugins a practice server never loads. None by default: Pracc
+# players keep their DEAFCS skins (InventorySimulator), as in matches.
+ENV UTILITY_PRACTICE_SKIP_PLUGINS=""
+# ...and the ones a lineup-render server also skips: it records bots, never a
+# player's inventory.
+ENV UTILITY_RENDER_SKIP_PLUGINS="InventorySimulator"
 
 ENV GAME_ID="730"
 ENV GAME_PARAMS=""

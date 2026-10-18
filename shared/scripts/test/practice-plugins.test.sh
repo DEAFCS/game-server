@@ -3,9 +3,11 @@
 # Run: bash shared/scripts/test/practice-plugins.test.sh
 #
 # The node volume (/opt/5stack/custom-plugins) carries DEAFCS's accessibility
-# plugins and the skins plugin. A match server loads all of them; a practice
-# server keeps the accessibility plugins and drops UTILITY_PRACTICE_SKIP_PLUGINS,
-# without ever deleting anything from the node volume.
+# plugins and the skins plugin. A match server and a Pracc server load all of
+# them (Pracc players keep their skins); a lineup-render server drops
+# UTILITY_RENDER_SKIP_PLUGINS (skins), and any server drops an explicit
+# UTILITY_PRACTICE_SKIP_PLUGINS, without ever deleting anything from the node
+# volume.
 
 set -u
 
@@ -57,6 +59,14 @@ plugin() {
   printf '%s' "$workdir/instance/game/csgo/addons/swiftlys2/plugins/$1"
 }
 
+# The image's own defaults, read from the Dockerfile so the test follows it.
+image_default() {
+  tr -d '\r' < "${REPO_DIR}/apps/swiftly/Dockerfile" |
+    sed -n "s/^ENV $1=\"\(.*\)\"$/\1/p"
+}
+DEFAULT_PRACTICE_SKIP="$(image_default UTILITY_PRACTICE_SKIP_PLUGINS)"
+DEFAULT_RENDER_SKIP="$(image_default UTILITY_RENDER_SKIP_PLUGINS)"
+
 run_setup() {
   INSTANCE_SERVER_DIR="$workdir/instance"
   create_symlinks "$workdir/node" "$INSTANCE_SERVER_DIR/game/csgo"
@@ -75,12 +85,40 @@ assert_present "$(plugin Mutesound)/Mutesound.dll" "the match server lost Muteso
 assert_present "$(plugin DeafCS.DisableValvePremute)/DeafCS.DisableValvePremute.dll" "the match server lost DisableValvePremute"
 teardown
 
-echo "a practice server keeps the accessibility plugins and drops skins"
+echo "the image skips nothing on Pracc and skins on a render server"
+[ -z "$DEFAULT_PRACTICE_SKIP" ] || fail "the image still skips '$DEFAULT_PRACTICE_SKIP' on Pracc"
+[ "$DEFAULT_RENDER_SKIP" = "InventorySimulator" ] || fail "the image's render skip list is '$DEFAULT_RENDER_SKIP'"
+
+echo "a Pracc server with the image defaults loads skins and the accessibility plugins"
 setup
-INSTALL_UTILITY_PRACTICE_PLUGIN=true UTILITY_PRACTICE_SKIP_PLUGINS="InventorySimulator" run_setup
-assert_missing "$(plugin InventorySimulator)" "the practice server still loads the skins plugin"
-assert_present "$(plugin Mutesound)/Mutesound.dll" "the practice server lost Mutesound"
-assert_present "$(plugin DeafCS.DisableValvePremute)/DeafCS.DisableValvePremute.dll" "the practice server lost DisableValvePremute"
+INSTALL_UTILITY_PRACTICE_PLUGIN=true UTILITY_RENDER_MODE="" \
+  UTILITY_PRACTICE_SKIP_PLUGINS="$DEFAULT_PRACTICE_SKIP" UTILITY_RENDER_SKIP_PLUGINS="$DEFAULT_RENDER_SKIP" run_setup
+assert_present "$(plugin InventorySimulator)/InventorySimulator.dll" "the Pracc server does not load the skins plugin"
+assert_present "$(plugin Mutesound)/Mutesound.dll" "the Pracc server lost Mutesound"
+assert_present "$(plugin DeafCS.DisableValvePremute)/DeafCS.DisableValvePremute.dll" "the Pracc server lost DisableValvePremute"
+teardown
+
+echo "a lineup-render server drops skins and keeps the accessibility plugins"
+setup
+INSTALL_UTILITY_PRACTICE_PLUGIN=true UTILITY_RENDER_MODE=true \
+  UTILITY_PRACTICE_SKIP_PLUGINS="$DEFAULT_PRACTICE_SKIP" UTILITY_RENDER_SKIP_PLUGINS="$DEFAULT_RENDER_SKIP" run_setup
+assert_missing "$(plugin InventorySimulator)" "the render server still loads the skins plugin"
+assert_present "$(plugin Mutesound)/Mutesound.dll" "the render server lost Mutesound"
+assert_present "$(plugin DeafCS.DisableValvePremute)/DeafCS.DisableValvePremute.dll" "the render server lost DisableValvePremute"
+assert_present "$workdir/node/addons/swiftlys2/plugins/InventorySimulator/InventorySimulator.dll" \
+  "the skins plugin was deleted from the node volume"
+teardown
+
+echo "a match server ignores the render skip list"
+setup
+INSTALL_UTILITY_PRACTICE_PLUGIN=false UTILITY_RENDER_MODE=true UTILITY_RENDER_SKIP_PLUGINS="InventorySimulator" run_setup
+assert_present "$(plugin InventorySimulator)/InventorySimulator.dll" "the match server lost the skins plugin"
+teardown
+
+echo "an explicit practice skip list still drops a plugin"
+setup
+INSTALL_UTILITY_PRACTICE_PLUGIN=true UTILITY_RENDER_MODE="" UTILITY_PRACTICE_SKIP_PLUGINS="InventorySimulator" run_setup
+assert_missing "$(plugin InventorySimulator)" "an explicit skip list did not drop the plugin"
 assert_present "$workdir/node/addons/swiftlys2/plugins/InventorySimulator/InventorySimulator.dll" \
   "the skins plugin was deleted from the node volume"
 teardown
@@ -95,7 +133,7 @@ echo "a plugins directory that is itself a node link is never written through"
 setup
 rmdir "$workdir/instance/game/csgo/addons/swiftlys2/plugins"
 ln -s "$workdir/node/addons/swiftlys2/plugins" "$workdir/instance/game/csgo/addons/swiftlys2/plugins"
-INSTALL_UTILITY_PRACTICE_PLUGIN=true UTILITY_PRACTICE_SKIP_PLUGINS="InventorySimulator" run_setup
+INSTALL_UTILITY_PRACTICE_PLUGIN=true UTILITY_RENDER_MODE=true UTILITY_RENDER_SKIP_PLUGINS="InventorySimulator" run_setup
 assert_present "$workdir/node/addons/swiftlys2/plugins/InventorySimulator/InventorySimulator.dll" \
   "the skins plugin was deleted from the node volume through a linked plugins directory"
 teardown

@@ -216,13 +216,20 @@ if [ "${INSTALL_UTILITY_PRACTICE_PLUGIN:-false}" = "true" ]; then
 fi
 
 # DEAFCS: a practice server keeps the node's DEAFCS plugins (accessibility:
-# DeafCS.DisableValvePremute, Mutesound) but never loads the ones named in
-# UTILITY_PRACTICE_SKIP_PLUGINS (skins, by default). Upstream gets the same
-# result from its plugin index, which DEAFCS nodes do not have. Only the
-# instance's own link is removed, never anything on the node volume: a link
-# whose parent is itself a link is left alone.
+# DeafCS.DisableValvePremute, Mutesound; skins: InventorySimulator, so Pracc
+# players have their DEAFCS skins as in matches) but never loads the ones named
+# in UTILITY_PRACTICE_SKIP_PLUGINS (none by default). A lineup-render server
+# also skips UTILITY_RENDER_SKIP_PLUGINS (skins): it records bots, and its
+# clips should not depend on anyone's inventory. Upstream gets the same result
+# from its plugin index, which DEAFCS nodes do not have. Only the instance's
+# own link is removed, never anything on the node volume: a link whose parent
+# is itself a link is left alone.
 if [ "${INSTALL_UTILITY_PRACTICE_PLUGIN:-false}" = "true" ]; then
-  for skipped_plugin in ${UTILITY_PRACTICE_SKIP_PLUGINS:-}; do
+  skipped_plugins="${UTILITY_PRACTICE_SKIP_PLUGINS:-}"
+  if [ "${UTILITY_RENDER_MODE:-}" = "true" ]; then
+    skipped_plugins="${skipped_plugins} ${UTILITY_RENDER_SKIP_PLUGINS:-}"
+  fi
+  for skipped_plugin in ${skipped_plugins}; do
     skipped_link="${INSTANCE_SERVER_DIR}/game/csgo/addons/swiftlys2/plugins/${skipped_plugin}"
     if [ -L "$skipped_link" ] && [ ! -L "$(dirname "$skipped_link")" ]; then
       rm -f "$skipped_link"
