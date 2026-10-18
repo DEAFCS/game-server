@@ -1994,6 +1994,23 @@ public partial class UtilityPracticePlugin : BasePlugin
         DrainPendingMapLoad();
         KeepWorldsCurrent();
         _hud?.Heal((int)(Environment.TickCount64 / 1000));
+        RetryHeldSaves();
+    }
+
+    private int _secondsSinceDrain;
+
+    // "It will retry" has to mean it: see PracticeSaveRetry.
+    private void RetryHeldSaves()
+    {
+        _secondsSinceDrain++;
+
+        if (!PracticeSaveRetry.ShouldDrain(_api.QueuedCount, _secondsSinceDrain))
+        {
+            return;
+        }
+
+        _secondsSinceDrain = 0;
+        _ = Task.Run(_api.Drain);
     }
 
     // Nobody stays dead on a practice server. Rejoining while dead, falling off
@@ -2185,7 +2202,20 @@ public partial class UtilityPracticePlugin : BasePlugin
 
         _drill.Tell = (steamId, message) => Tell(steamId, $" {ChatColors.Green}{message}");
 
-        _drill.Note = (steamId, message) => Tell(steamId, $" {ChatColors.Grey}{message}");
+        // A save that only got through on a retry: it gets its panel id (Edit
+        // Last Throw needs it) and its player hears that it arrived.
+        _api.Delivered += (record, id) =>
+            Core.Scheduler.NextTick(() =>
+            {
+                record.id = id;
+
+                if (ulong.TryParse(record.author_steam_id, out ulong author))
+                {
+                    Tell(author, $" {ChatColors.Green}{record.name} reached the panel");
+                }
+            });
+
+        _drill.Note =(steamId, message) => Tell(steamId, $" {ChatColors.Grey}{message}");
 
         _drill.Center = (steamId, message) =>
         {

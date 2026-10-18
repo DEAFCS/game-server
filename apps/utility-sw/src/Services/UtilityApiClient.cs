@@ -404,6 +404,12 @@ public class UtilityApiClient
             != null;
     }
 
+    /// <summary>
+    /// A queued save reached the panel on a retry: the record and the id the
+    /// panel gave it. Raised off the game thread.
+    /// </summary>
+    public event Action<LineupRecord, string>? Delivered;
+
     // Retries oldest first: a player's saves replay in the order they threw
     // them, so the library reads the way the session went.
     public async Task Drain()
@@ -426,7 +432,9 @@ public class UtilityApiClient
                     }
                 }
 
-                if (await Post(record) == null)
+                string? id = await Post(record);
+
+                if (id == null)
                 {
                     return;
                 }
@@ -435,6 +443,11 @@ public class UtilityApiClient
                 {
                     _retryQueue.TryDequeue(out _);
                 }
+
+                // The save's panel id was thrown away here, so a save that
+                // only got through on a retry could never be edited, and its
+                // player was never told it had arrived.
+                Delivered?.Invoke(record, id);
             }
 
             while (true)
