@@ -781,7 +781,15 @@ public partial class UtilityPracticePlugin : BasePlugin
 
         foreach (IPlayer player in Core.PlayerManager.GetAllPlayers())
         {
-            if (player != null && player.IsValid && player.IsFakeClient && player.Controller.Team is Team.CT or Team.T)
+            // SourceTV is a fake client too, and was once counted (and kicked)
+            // as a surplus bot: it is never one.
+            if (
+                player != null
+                && player.IsValid
+                && player.IsFakeClient
+                && !player.Controller.IsHLTV
+                && player.Controller.Team is Team.CT or Team.T
+            )
             {
                 onTeams[player.PlayerID] = player;
             }
@@ -794,19 +802,29 @@ public partial class UtilityPracticePlugin : BasePlugin
             return;
         }
 
-        // The quota first, or the engine refills the slots as they empty.
-        Core.Engine.ExecuteCommand($"bot_quota {_bots.Count}");
+        string quotaBefore = ConVarText("bot_quota");
 
+        // bot_kick by name takes the quota down with the bot, one for one, so
+        // the engine neither refills the slot nor trims a second bot to meet a
+        // lowered quota. (Kicking and also setting bot_quota did both: two
+        // surplus bots cost three, the placed one included.)
         foreach (int slot in surplus)
         {
-            onTeams[slot].Kick("", SwiftlyS2.Shared.ProtobufDefinitions.ENetworkDisconnectionReason.NETWORK_DISCONNECT_KICKED);
+            string name = onTeams[slot].Controller.PlayerName;
+
+            if (string.IsNullOrWhiteSpace(name) || name.Contains('"'))
+            {
+                continue;
+            }
+
+            Core.Engine.ExecuteCommand($"bot_kick \"{name}\"");
         }
 
         _logger.LogWarning(
             "{extra} bot(s) joined past the {placed} placed (quota {quota}, mode {mode}); removed them",
             surplus.Count,
             _bots.Count,
-            ConVarText("bot_quota"),
+            quotaBefore,
             ConVarText("bot_quota_mode")
         );
     }
