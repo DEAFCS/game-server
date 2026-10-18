@@ -116,7 +116,7 @@ public partial class UtilityPracticePlugin
 
     private void KeepTheRoundClock()
     {
-        KeepBuyTimeOff();
+        KeepBuyingOpen();
 
         CCSGameRules? rules = Core.EntitySystem.GetGameRules();
 
@@ -134,26 +134,31 @@ public partial class UtilityPracticePlugin
         ReloadWhenTheClockRunsOut(rules);
     }
 
-    // Nothing is bought here, and the map's mode cfg lands after ours often
-    // enough to put a buy timer back on everybody's screen.
-    private void KeepBuyTimeOff()
+    // DEAFCS: buying stays open everywhere for the whole round (PracticeBuy).
+    // Upstream turned buy time OFF here; the map's mode cfg lands after ours
+    // often enough to close buying again (mp_buytime 20, mp_buy_anywhere 0),
+    // so it is put back each second.
+    private void KeepBuyingOpen()
     {
         try
         {
             IConVar? buyTime = Core.ConVar.FindAsString("mp_buytime");
 
-            if (
-                buyTime != null
-                && float.TryParse(buyTime.ValueAsString, CultureInfo.InvariantCulture, out float seconds)
-                && seconds > 0f
-            )
+            if (buyTime != null && PracticeBuy.BuyTimeTooShort(buyTime.ValueAsString))
             {
-                buyTime.ValueAsString = "0";
+                buyTime.ValueAsString = PracticeBuy.BuyTimeSeconds.ToString(CultureInfo.InvariantCulture);
+            }
+
+            IConVar? anywhere = Core.ConVar.FindAsString("mp_buy_anywhere");
+
+            if (anywhere != null && PracticeBuy.BuyAnywhereOff(anywhere.ValueAsString))
+            {
+                anywhere.ValueAsString = "1";
             }
         }
         catch (Exception error)
         {
-            _logger.LogWarning(error, "unable to turn buy time off");
+            _logger.LogWarning(error, "unable to keep buying open");
         }
     }
 

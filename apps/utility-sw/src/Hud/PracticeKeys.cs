@@ -196,6 +196,8 @@ public partial class UtilityPracticePlugin
             return;
         }
 
+        AfkActive(player.SteamID);
+
         // Caught here because nothing above this is ours: an exception out of
         // a scheduled call lands in the runtime, not in a log.
         try

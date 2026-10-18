@@ -179,6 +179,8 @@ public partial class UtilityPracticePlugin : BasePlugin
         // and the smoke actually come out in.
         _recorder.Thrown += (steamId, _) =>
         {
+            AfkActive(steamId);
+
             PracticeState state = _system.StateFor(steamId);
 
             state.InFlightColorIndex = state.ThrowColorIndex;
@@ -1119,6 +1121,8 @@ public partial class UtilityPracticePlugin : BasePlugin
                 continue;
             }
 
+            AfkInput(player.SteamID, buttons);
+
             bool down = (buttons & InUse) != 0;
 
             // The edge, not the state: holding use must not teleport once a
@@ -2017,6 +2021,7 @@ public partial class UtilityPracticePlugin : BasePlugin
         KeepWorldsCurrent();
         _hud?.Heal((int)(Environment.TickCount64 / 1000));
         RetryHeldSaves();
+        AfkWatch();
     }
 
     private int _secondsSinceDrain;
@@ -2147,6 +2152,29 @@ public partial class UtilityPracticePlugin : BasePlugin
             }
 
             _system.GiveUtility(player);
+            TopUpMoney(player);
+        }
+    }
+
+    // DEAFCS: practice rounds never end, so mp_afterroundmoney never refills
+    // what a player spends in the buy menu (PracticeBuy).
+    private void TopUpMoney(IPlayer player)
+    {
+        try
+        {
+            CCSPlayerController_InGameMoneyServices? money = player.Controller.InGameMoneyServices;
+
+            if (money == null || !PracticeBuy.ShouldTopUp(money.Account))
+            {
+                return;
+            }
+
+            money.Account = PracticeBuy.Money;
+            money.AccountUpdated();
+        }
+        catch (Exception error)
+        {
+            _logger.LogWarning(error, "unable to top up money for {steam}", player.SteamID);
         }
     }
 
@@ -2254,6 +2282,7 @@ public partial class UtilityPracticePlugin : BasePlugin
     // nobody is left to be teleported or told anything.
     private void OnPlayerGone(ulong steamId)
     {
+        AfkForget(steamId);
         SendHeldSaves(steamId);
         _drill.Forget(steamId);
         _system.Forget(steamId);
@@ -2720,8 +2749,9 @@ public partial class UtilityPracticePlugin : BasePlugin
         "mp_roundtime 60",
         "mp_roundtime_defuse 60",
         "mp_respawn_immunitytime 0",
-        "mp_buy_anywhere 0",
-        "mp_buytime 0",
+        // DEAFCS: buy anywhere, all round (PracticeBuy; KeepBuyingOpen re-asserts).
+        "mp_buy_anywhere 1",
+        "mp_buytime 60000",
         "mp_maxmoney 65535",
         "mp_startmoney 65535",
         "mp_afterroundmoney 65535",

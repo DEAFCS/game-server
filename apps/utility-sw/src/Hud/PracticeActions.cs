@@ -1259,8 +1259,10 @@ public partial class UtilityPracticePlugin
         }
     }
 
-    // Nothing to buy: every grenade is handed back as it is thrown. With the
-    // zones gone the buy key has nowhere it works, so it opens nothing.
+    // Upstream: nothing to buy, so with the zones gone the buy key opens
+    // nothing. DEAFCS buys anywhere (mp_buy_anywhere 1, PracticeBuy), which
+    // does not need a zone at all, so removing them changes nothing for
+    // buying and is kept as upstream has it.
     private void RemoveBuyZones()
     {
         try

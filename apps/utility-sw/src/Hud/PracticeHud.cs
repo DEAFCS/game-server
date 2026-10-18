@@ -217,6 +217,8 @@ public partial class UtilityPracticePlugin
 
     private void OnHudClicked(IPlayer player, string layout, string button)
     {
+        AfkActive(player.SteamID);
+
         if (layout == HudSlots.NadeEdit)
         {
             OnEditClicked(player, button);
