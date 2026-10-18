@@ -3,24 +3,24 @@ using Xunit;
 
 namespace FiveStack.Tests;
 
-// Pracc AFK protection (DEAFCS): warn at 25, warn again at 29, kick at 30.
+// Pracc AFK protection (DEAFCS policy): warn at 5, warn again at 9, kick at 10.
 public class PracticeAfkTests
 {
     private const ulong Anders = 1;
     private const ulong Theft = 2;
 
     [Fact]
-    public void WarnsAt25WarnsAgainAt29AndKicksAt30()
+    public void WarnsAt5WarnsAgainAt9AndKicksAt10()
     {
         var afk = new PracticeAfk();
         afk.Active(Anders, 0);
 
-        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 25 * 60 - 1));
-        Assert.Equal(PracticeAfk.Step.Warn, afk.Check(Anders, 25 * 60));
-        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 28 * 60));
-        Assert.Equal(PracticeAfk.Step.FinalWarn, afk.Check(Anders, 29 * 60));
-        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 29 * 60 + 30));
-        Assert.Equal(PracticeAfk.Step.Kick, afk.Check(Anders, 30 * 60));
+        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 5 * 60 - 1));
+        Assert.Equal(PracticeAfk.Step.Warn, afk.Check(Anders, 5 * 60));
+        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 8 * 60));
+        Assert.Equal(PracticeAfk.Step.FinalWarn, afk.Check(Anders, 9 * 60));
+        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 9 * 60 + 30));
+        Assert.Equal(PracticeAfk.Step.Kick, afk.Check(Anders, 10 * 60));
     }
 
     [Fact]
@@ -29,9 +29,9 @@ public class PracticeAfkTests
         var afk = new PracticeAfk();
         afk.Active(Anders, 0);
 
-        Assert.Equal(PracticeAfk.Step.Warn, afk.Check(Anders, 25 * 60));
-        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 25 * 60 + 1));
-        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 25 * 60 + 2));
+        Assert.Equal(PracticeAfk.Step.Warn, afk.Check(Anders, 5 * 60));
+        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 5 * 60 + 1));
+        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 5 * 60 + 2));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class PracticeAfkTests
         afk.Active(Anders, 0);
 
         // A server that did not tick for a while: no stale warning, the kick.
-        Assert.Equal(PracticeAfk.Step.Kick, afk.Check(Anders, 31 * 60));
+        Assert.Equal(PracticeAfk.Step.Kick, afk.Check(Anders, 11 * 60));
     }
 
     [Fact]
@@ -49,12 +49,12 @@ public class PracticeAfkTests
     {
         var afk = new PracticeAfk();
         afk.Active(Anders, 0);
-        Assert.Equal(PracticeAfk.Step.Warn, afk.Check(Anders, 25 * 60));
+        Assert.Equal(PracticeAfk.Step.Warn, afk.Check(Anders, 5 * 60));
 
-        afk.Active(Anders, 26 * 60);
+        afk.Active(Anders, 6 * 60);
 
-        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 30 * 60));
-        Assert.Equal(PracticeAfk.Step.Warn, afk.Check(Anders, 26 * 60 + 25 * 60));
+        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 10 * 60));
+        Assert.Equal(PracticeAfk.Step.Warn, afk.Check(Anders, 6 * 60 + 5 * 60));
     }
 
     [Fact]
@@ -65,13 +65,13 @@ public class PracticeAfkTests
         afk.Active(Theft, 0);
 
         // Theft keeps practising; Anders walks away.
-        for (int minute = 1; minute <= 30; minute++)
+        for (int minute = 1; minute <= 10; minute++)
         {
             afk.Active(Theft, minute * 60);
         }
 
-        Assert.Equal(PracticeAfk.Step.Kick, afk.Check(Anders, 30 * 60 + 1));
-        Assert.Equal(PracticeAfk.Step.None, afk.Check(Theft, 30 * 60 + 1));
+        Assert.Equal(PracticeAfk.Step.Kick, afk.Check(Anders, 10 * 60 + 1));
+        Assert.Equal(PracticeAfk.Step.None, afk.Check(Theft, 10 * 60 + 1));
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class PracticeAfkTests
 
         Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 99_999));
         Assert.Equal(0, afk.IdleSeconds(Anders, 99_999));
-        Assert.Equal(PracticeAfk.Step.Warn, afk.Check(Anders, 99_999 + 25 * 60));
+        Assert.Equal(PracticeAfk.Step.Warn, afk.Check(Anders, 99_999 + 5 * 60));
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class PracticeAfkTests
         afk.Active(Anders, 0);
         afk.Forget(Anders);
 
-        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 40 * 60));
+        Assert.Equal(PracticeAfk.Step.None, afk.Check(Anders, 20 * 60));
     }
 
     [Fact]
@@ -127,8 +127,8 @@ public class PracticeAfkTests
     [Fact]
     public void TheThresholdsAreTheAgreedOnes()
     {
-        Assert.Equal(25 * 60, PracticeAfk.WarnSeconds);
-        Assert.Equal(29 * 60, PracticeAfk.FinalWarnSeconds);
-        Assert.Equal(30 * 60, PracticeAfk.KickSeconds);
+        Assert.Equal(5 * 60, PracticeAfk.WarnSeconds);
+        Assert.Equal(9 * 60, PracticeAfk.FinalWarnSeconds);
+        Assert.Equal(10 * 60, PracticeAfk.KickSeconds);
     }
 }

@@ -10,7 +10,7 @@ namespace UtilityPractice;
 
 // DEAFCS: AFK protection (PracticeAfk). A player connected but doing nothing
 // keeps a practice server from everyone else, and the reaper only ends a
-// session once it is empty. Warned at 25 minutes, again at 29, kicked at 30;
+// session once it is empty. Warned at 5 minutes, again at 9, kicked at 10;
 // the empty-server reaper then ends the session as it always has.
 //
 // What counts as doing something: any button held (moving, shooting, jumping,
@@ -87,16 +87,23 @@ public partial class UtilityPracticePlugin
             switch (_afk.Check(steamId, now))
             {
                 case PracticeAfk.Step.Warn:
-                    AfkWarn(player, "You have been inactive for 25 minutes. Move or press any key, or you will be kicked in 5 minutes.");
+                    AfkWarn(player, $"You have been inactive for {Minutes(PracticeAfk.WarnSeconds)}. Move or press any key, or you will be kicked in {Minutes(PracticeAfk.KickSeconds - PracticeAfk.WarnSeconds)}.");
                     break;
                 case PracticeAfk.Step.FinalWarn:
-                    AfkWarn(player, "Final warning: you will be kicked for inactivity in 1 minute.");
+                    AfkWarn(player, $"Final warning: you will be kicked for inactivity in {Minutes(PracticeAfk.KickSeconds - PracticeAfk.FinalWarnSeconds)}.");
                     break;
                 case PracticeAfk.Step.Kick:
                     AfkKick(player);
                     break;
             }
         }
+    }
+
+    // The messages follow the thresholds, so a policy change is one edit.
+    private static string Minutes(int seconds)
+    {
+        int minutes = seconds / 60;
+        return minutes == 1 ? "1 minute" : $"{minutes} minutes";
     }
 
     // On screen three ways, so it is seen whatever the player is looking at:
@@ -125,7 +132,7 @@ public partial class UtilityPracticePlugin
         try
         {
             player.Kick(
-                "Kicked for 30 minutes of inactivity in Pracc",
+                $"Kicked for {Minutes(PracticeAfk.KickSeconds)} of inactivity in Pracc",
                 ENetworkDisconnectionReason.NETWORK_DISCONNECT_KICKED_IDLE
             );
         }

@@ -5,14 +5,15 @@ namespace FiveStack.Utilities;
 // The reaper only ends a session once nobody is connected, so a player who
 // stays connected and walks away keeps a server -- one of the few the reserve
 // leaves for practice -- for as long as they like. Each player gets their own
-// idle clock, reset by anything they actually do: a warning at 25 minutes, a
-// last one at 29, and a kick at 30, after which the empty-server reaper ends
-// the session as before. Upstream 5Stack has no AFK handling.
+// idle clock, reset by anything they actually do: a warning at 5 minutes, a
+// last one at 9, and a kick at 10 (DEAFCS Pracc policy, 2026-10-18; was
+// 25/29/30), after which the empty-server reaper ends the session as before.
+// Upstream 5Stack has no AFK handling.
 public sealed class PracticeAfk
 {
-    public const int WarnSeconds = 25 * 60;
-    public const int FinalWarnSeconds = 29 * 60;
-    public const int KickSeconds = 30 * 60;
+    public const int WarnSeconds = 5 * 60;
+    public const int FinalWarnSeconds = 9 * 60;
+    public const int KickSeconds = 10 * 60;
 
     // A look this small between two one-second samples is aim jitter, not a
     // player: below it the view does not count as moving.
