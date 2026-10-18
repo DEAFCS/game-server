@@ -31,6 +31,10 @@ public partial class FiveStackPlugin
 
         match.gameEnded = true;
 
+        // The game is over: players leaving now (or in the last second of the
+        // final round) are not leavers. Stop their disconnect-budget timers.
+        match.disconnectBudgetSystem.OnMapEnded();
+
         {
             MatchData? capData = match.GetMatchData();
             MatchMap? capMap = match.GetCurrentMap();

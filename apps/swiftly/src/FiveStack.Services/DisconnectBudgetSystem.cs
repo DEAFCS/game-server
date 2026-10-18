@@ -57,7 +57,21 @@ public class DisconnectBudgetSystem
     // freeze period starts (see FlushPendingAnnouncements, called from
     // OnRoundStart) -- players asked not to see this mid-round, but it must
     // still reach them, just delayed to the next round instead of lost.
-    private readonly List<string> _pendingAnnouncements = new List<string>();
+    //
+    // Each entry remembers who it is about: a "N min left" warning is only
+    // useful while that player is still gone, so it is dropped when they
+    // reconnect (OnPlayerReconnected) or turn out to be back by flush time.
+    // Telling everyone "X has 4 min left" after X is already back in the
+    // server only confuses people. SteamId 0 = always send (e.g. the ban).
+    private readonly List<(ulong SteamId, string Message)> _pendingAnnouncements =
+        new List<(ulong SteamId, string Message)>();
+
+    // Set when the map/match is over (see OnMapEnded). Players leave the
+    // moment the final round ends, often a fraction of a second before the
+    // game-end event lands, so their budget timer was already running and
+    // went on to ban them after the game was finished. While set, no timer
+    // is started and a firing one does nothing. Cleared by Reset().
+    private bool _mapEnded;
 
     public DisconnectBudgetSystem(
         ILogger<DisconnectBudgetSystem> logger,
@@ -77,7 +91,7 @@ public class DisconnectBudgetSystem
     public void OnPlayerDisconnected(ulong steamId, string playerName)
     {
         MatchManager? match = _matchService.GetCurrentMatch();
-        if (match == null || !match.IsInPlayOrKnife())
+        if (_mapEnded || match == null || match.gameEnded || !match.IsInPlayOrKnife())
         {
             return;
         }
@@ -137,6 +151,7 @@ public class DisconnectBudgetSystem
         }
 
         KillMilestoneTimers(steamId);
+        _pendingAnnouncements.RemoveAll(pending => pending.SteamId == steamId);
 
         if (_disconnectedAt.TryGetValue(steamId, out DateTime disconnectedAt))
         {
@@ -175,20 +190,25 @@ public class DisconnectBudgetSystem
 
             if (delay <= 0)
             {
-                AnnounceMilestone(playerName, milestone);
+                AnnounceMilestone(steamId, playerName, milestone);
                 continue;
             }
 
             timers.Add(
-                TimerUtility.AddTimer(delay, () => AnnounceMilestone(playerName, milestone))
+                TimerUtility.AddTimer(delay, () => AnnounceMilestone(steamId, playerName, milestone))
             );
         }
 
         _milestoneTimers[steamId] = timers;
     }
 
-    private void AnnounceMilestone(string playerName, int secondsRemaining)
+    private void AnnounceMilestone(ulong steamId, string playerName, int secondsRemaining)
     {
+        if (_mapEnded || !_disconnectedAt.ContainsKey(steamId))
+        {
+            return;
+        }
+
         // MM-only -- the budget itself (and the eventual ban) still applies
         // in tournament, just without this periodic reminder broadcast.
         if (_matchService.GetCurrentMatch()?.GetMatchData()?.is_tournament_match == true)
@@ -198,6 +218,7 @@ public class DisconnectBudgetSystem
 
         int minutesRemaining = secondsRemaining / 60;
         SendOrQueue(
+            steamId,
             $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}"
                 + _localizer["leaver.reconnect_warning", playerName, minutesRemaining]
         );
@@ -211,7 +232,7 @@ public class DisconnectBudgetSystem
     // window (KnifeSystem re-enables CS2's native WarmupPeriod flag there
     // to avoid freezing the game) -- that's intentional here, it's the same
     // "nothing to interrupt" waiting state as regular warmup.
-    private void SendOrQueue(string message)
+    private void SendOrQueue(ulong steamId, string message)
     {
         MatchManager? match = _matchService.GetCurrentMatch();
         bool isWarmup = match?.IsWarmup() == true;
@@ -222,7 +243,7 @@ public class DisconnectBudgetSystem
             return;
         }
 
-        _pendingAnnouncements.Add(message);
+        _pendingAnnouncements.Add((steamId, message));
     }
 
     // Called from OnRoundStart, right as freeze period begins -- sends any
@@ -234,11 +255,49 @@ public class DisconnectBudgetSystem
             return;
         }
 
-        foreach (string message in _pendingAnnouncements)
+        foreach ((ulong steamId, string message) in _pendingAnnouncements)
         {
+            // Skip warnings about someone who is back by now (steamId 0 is
+            // never tracked as disconnected, so it is always sent).
+            if (steamId != 0 && !_disconnectedAt.ContainsKey(steamId))
+            {
+                continue;
+            }
+
             _gameServer.Message(MessageType.Chat, message);
         }
 
+        _pendingAnnouncements.Clear();
+    }
+
+    // A new map of the same match begins (gameEnded is cleared at the same
+    // time) -- budgets apply again, with the time already used carried over.
+    public void OnMapStarted()
+    {
+        _mapEnded = false;
+    }
+
+    // Called from OnGameEnd: the map is over, so nobody can leave it any
+    // more. Stops every running budget timer and remembers it, so a player
+    // who left in the last second of the final round (before the game-end
+    // event) is not banned a few minutes later for "leaving" a finished game.
+    // Time already used stays counted for any later map of the same match.
+    public void OnMapEnded()
+    {
+        _mapEnded = true;
+
+        foreach (CancellationTokenSource timer in _timers.Values)
+        {
+            TimerUtility.Kill(timer);
+        }
+        _timers.Clear();
+
+        foreach (ulong steamId in _milestoneTimers.Keys.ToList())
+        {
+            KillMilestoneTimers(steamId);
+        }
+
+        _disconnectedAt.Clear();
         _pendingAnnouncements.Clear();
     }
 
@@ -256,6 +315,13 @@ public class DisconnectBudgetSystem
 
     private void HandleBudgetExhausted(ulong steamId)
     {
+        // Backstop for a timer that was already due when the map ended.
+        MatchManager? match = _matchService.GetCurrentMatch();
+        if (_mapEnded || match == null || match.gameEnded || match.IsMapFinished())
+        {
+            return;
+        }
+
         _usedSeconds[steamId] = BudgetSeconds;
         _timers.Remove(steamId);
         _disconnectedAt.Remove(steamId);
@@ -276,6 +342,7 @@ public class DisconnectBudgetSystem
         _logger.LogInformation($"Disconnect budget exhausted for {steamId}");
 
         SendOrQueue(
+            0,
             $"{ChatColors.Orange}[DEAFCS] {ChatColors.Red}" + _localizer["leaver.banned", playerName]
         );
 
@@ -301,5 +368,6 @@ public class DisconnectBudgetSystem
         _playerNames.Clear();
         _pendingAnnouncements.Clear();
         _exhaustedNotified.Clear();
+        _mapEnded = false;
     }
 }

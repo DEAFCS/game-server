@@ -157,6 +157,7 @@ public class MatchManager
     {
         _activeMapId = GetCurrentMap()?.id;
         gameEnded = false;
+        disconnectBudgetSystem.OnMapStarted();
     }
 
     public bool IsMapFinished()
@@ -805,6 +806,7 @@ public class MatchManager
         }
 
         gameEnded = false;
+        disconnectBudgetSystem.OnMapStarted();
 
         if (_matchData.options.cfg_overrides != null && _matchData.options.cfg_overrides.Count > 0)
         {
