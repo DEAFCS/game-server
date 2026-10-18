@@ -573,10 +573,50 @@ public partial class UtilityPracticePlugin
             return;
         }
 
-        if (!NextThrowHere(player, pawn))
+        if (!NextThrowHere(player, pawn) && !StandOnNearest(player, pawn))
         {
-            StandOnNearest(player, pawn);
+            StandOnSpawn(player, pawn);
         }
+    }
+
+    // DEAFCS: E onto a spawn point, so a throw can be practised from where a
+    // round actually starts. Only while Spawn Points are shown, and only after
+    // every saved-lineup answer said no -- a lineup beside a spawn always wins.
+    // The same teleport Next Spawn uses: the spawn's position and facing, still,
+    // so the player can throw at once.
+    private void StandOnSpawn(IPlayer player, CCSPlayerPawn pawn)
+    {
+        if (!_replay.SpawnsShown)
+        {
+            return;
+        }
+
+        List<ThrowSnapshot> spawns = _system.SpawnPoints();
+
+        if (spawns.Count == 0)
+        {
+            return;
+        }
+
+        Vector origin = pawn.AbsOrigin ?? new Vector(0, 0, 0);
+        QAngle eyes = pawn.EyeAngles;
+
+        int index = PracticeSpawnSnap.Choose(
+            new Vec3(origin.X, origin.Y, origin.Z),
+            eyes.Y,
+            eyes.X,
+            spawns,
+            (eye, point) => _replay.Sees(eye, point)
+        );
+
+        if (index < 0)
+        {
+            return;
+        }
+
+        PracticeSystem.TeleportTo(player, spawns[index]);
+        _system.StateFor(player.SteamID).SpawnIndex = index;
+        Toast(player, $"Spawn {index + 1} of {spawns.Count}");
     }
 
     // False when there is no next throw to step to from where they stand.

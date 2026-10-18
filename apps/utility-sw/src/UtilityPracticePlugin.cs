@@ -1138,7 +1138,9 @@ public partial class UtilityPracticePlugin : BasePlugin
         }
     }
 
-    private void StandOnNearest(IPlayer player, CCSPlayerPawn pawn)
+    // Whether a saved lineup answered the press -- snapped onto, or already
+    // stood on. Only when none did does E fall through to a spawn point.
+    private bool StandOnNearest(IPlayer player, CCSPlayerPawn pawn)
     {
         Vector origin = pawn.AbsOrigin ?? new Vector(0, 0, 0);
         var at = new Vec3(origin.X, origin.Y, origin.Z);
@@ -1147,7 +1149,7 @@ public partial class UtilityPracticePlugin : BasePlugin
 
         if (library.Count == 0)
         {
-            return;
+            return false;
         }
 
         // What they are pointing at wins over what they are near: with two
@@ -1164,7 +1166,7 @@ public partial class UtilityPracticePlugin : BasePlugin
 
         if (target == null)
         {
-            return;
+            return false;
         }
 
         Vec3 feet = target.release.feet_position;
@@ -1172,14 +1174,14 @@ public partial class UtilityPracticePlugin : BasePlugin
 
         if (away > UseReachUnits)
         {
-            return;
+            return false;
         }
 
         // Already on it. Teleporting somebody onto the spot they are standing
         // on reads as the key doing nothing, and costs them their run-up.
         if (away <= PracticeLineupUtility.StanceToleranceUnits)
         {
-            return;
+            return true;
         }
 
         if (_replay.StandOn(player, target))
@@ -1195,6 +1197,8 @@ public partial class UtilityPracticePlugin : BasePlugin
             _standingIn.Remove(player.SteamID);
             ShowWorldFor(player.SteamID);
         }
+
+        return true;
     }
 
     private static LineupRecord? Nearest(IReadOnlyList<LineupRecord> library, Vec3 at)
