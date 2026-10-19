@@ -736,6 +736,23 @@ public class MatchManager
 
         _logger.LogInformation($"Setup Match {_matchData.id}");
 
+        // DeafCSTeamDamage plugin switch. CreateOrFind so the value sticks no
+        // matter which plugin loads first; tournaments keep vanilla team damage.
+        try
+        {
+            _core
+                .ConVar.CreateOrFind(
+                    "deafcs_teamdamage_enabled",
+                    "Block teammate bullet and knife damage. Disabled for tournament matches.",
+                    true
+                )
+                .Value = !_matchData.is_tournament_match;
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "Could not set deafcs_teamdamage_enabled");
+        }
+
         // Bug: SetupMatch re-runs on every API resync (e.g. right after a
         // connect/disconnect during warmup). Unconditionally restoring the
         // original, longer matchData.cancels_at here undid whatever

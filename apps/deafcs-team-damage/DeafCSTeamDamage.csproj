@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>DeafCSTeamDamage</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="SwiftlyS2.CS2" Version="1.4.14" ExcludeAssets="runtime" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
