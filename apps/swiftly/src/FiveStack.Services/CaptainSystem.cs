@@ -95,6 +95,16 @@ public class CaptainSystem
         _captains[team] = null;
         ClearCaptainBySteamId(player.SteamID.ToString());
 
+        // The flag on the server's own copy of the match too, or IsCaptain would
+        // hand the spot straight back to them when they reconnect.
+        MatchMember? member = match.GetMatchData() is MatchData data
+            ? MatchUtility.GetMemberFromLineup(data, player.SteamID.ToString(), player.Name)
+            : null;
+        if (member != null)
+        {
+            member.captain = false;
+        }
+
         _matchEvents.PublishGameEvent(
             "captain",
             new Dictionary<string, object>
@@ -104,6 +114,13 @@ public class CaptainSystem
                 { "player_name", player.Name },
             }
         );
+
+        // Knife: the side decision cannot wait for the captain to come back, so
+        // a random teammate takes over straight away.
+        if (match.IsKnife())
+        {
+            AutoSelectCaptain(team, player.SteamID.ToString());
+        }
 
         ShowCaptains();
     }
@@ -244,7 +261,7 @@ public class CaptainSystem
         return false;
     }
 
-    private void AutoSelectCaptain(Team team)
+    private void AutoSelectCaptain(Team team, string? excludeSteamId = null)
     {
         var players = MatchUtility
             .Players()
@@ -252,7 +269,8 @@ public class CaptainSystem
             {
                 return player.Controller.Team == team
                     && player.IsFakeClient == false
-                    && player.IsValid;
+                    && player.IsValid
+                    && player.SteamID.ToString() != excludeSteamId;
             });
 
         foreach (var _player in players)
