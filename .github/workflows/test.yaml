@@ -19,6 +19,9 @@ jobs:
       - name: Test documented crash-report limitations
         run: python3 shared/scripts/test/crash-report-limitations.test.py
 
+      - name: Test server launch
+        run: bash shared/scripts/test/server-launch.test.sh
+
   test:
     runs-on: ubuntu-latest
     strategy:
