@@ -58,7 +58,16 @@ public partial class FiveStackPlugin
         if (match.IsWarmup() || match.IsKnife())
         {
             match.readySystem.UnreadyPlayer(player);
-            match.captainSystem.RemoveCaptain(@event.UserIdPlayer);
+
+            // Warmup keeps the captain's spot for them: a captain who drops and
+            // reconnects is still captain. If they are not back when the knife
+            // round starts, AutoSelectCaptains hands it to a teammate then.
+            // Knife has nothing after it to wait for, so it still clears.
+            if (match.IsKnife())
+            {
+                match.captainSystem.RemoveCaptain(@event.UserIdPlayer);
+            }
+
             match.warmupShortenSystem.Check();
         }
 

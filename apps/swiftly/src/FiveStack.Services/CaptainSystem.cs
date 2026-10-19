@@ -190,7 +190,9 @@ public class CaptainSystem
             return;
         }
 
-        if (_captains[captainTeam] == null || force)
+        // GetTeamCaptain, not the raw slot: a captain who disconnected in warmup
+        // still sits in it (disposed), and counts as no captain.
+        if (GetTeamCaptain(captainTeam) == null || force)
         {
             SetCaptain(player, captainTeam, announce: true);
             _logger.LogInformation(
@@ -341,6 +343,8 @@ public class CaptainSystem
             return;
         }
 
+        RevokeOtherCaptainFlags(player);
+
         _matchEvents.PublishGameEvent(
             "captain",
             new Dictionary<string, object>
@@ -350,6 +354,60 @@ public class CaptainSystem
                 { "player_name", player.Name },
             }
         );
+    }
+
+    // A new captain replaces whoever held the flag before them, including a
+    // captain who dropped in warmup and never came back. Without this both stay
+    // flagged, and IsCaptain hands the spot straight back to the old one the
+    // moment they reconnect.
+    private void RevokeOtherCaptainFlags(IPlayer player)
+    {
+        MatchData? matchData = _matchService.GetCurrentMatch()?.GetMatchData();
+        if (matchData == null)
+        {
+            return;
+        }
+
+        MatchMember? self = MatchUtility.GetMemberFromLineup(
+            matchData,
+            player.SteamID.ToString(),
+            player.Name
+        );
+        if (self == null)
+        {
+            return;
+        }
+
+        self.captain = true;
+
+        foreach (
+            MatchMember other in matchData.lineup_1.lineup_players.Concat(
+                matchData.lineup_2.lineup_players
+            )
+        )
+        {
+            if (
+                other == self
+                || other.match_lineup_id != self.match_lineup_id
+                || !other.captain
+                || string.IsNullOrEmpty(other.steam_id)
+            )
+            {
+                continue;
+            }
+
+            other.captain = false;
+
+            _matchEvents.PublishGameEvent(
+                "captain",
+                new Dictionary<string, object>
+                {
+                    { "claim", false },
+                    { "steam_id", other.steam_id },
+                    { "player_name", other.name },
+                }
+            );
+        }
     }
 
     private void ClearCaptainBySteamId(string steamId, Team? ignoreTeam = null)
