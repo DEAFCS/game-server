@@ -2,6 +2,7 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
+using FiveStack.Enums;
 using FiveStack.Utilities;
 
 namespace FiveStack;
@@ -30,8 +31,24 @@ public partial class FiveStackPlugin
     [CommandHelper(whoCanExecute: CommandUsage.SERVER_ONLY)]
     public void SetMatchState(CCSPlayerController? player, CommandInfo command)
     {
-        _matchService
-            .GetCurrentMatch()
-            ?.UpdateMapStatus(MatchUtility.MapStatusStringToEnum(command.ArgString));
+        MatchManager? match = _matchService.GetCurrentMatch();
+        eMapStatus status = MatchUtility.MapStatusStringToEnum(command.ArgString);
+
+        if (status == eMapStatus.Warmup)
+        {
+            string? refusal = RoundRestoreGateUtility.WarmupRefusal(
+                match?.GetMatchData() != null,
+                match?.GetCurrentMapStatus() ?? eMapStatus.Unknown
+            );
+            if (refusal != null)
+            {
+                command.ReplyToCommand(
+                    $"{RoundRestoreGateUtility.MatchStateRefusedPrefix} {refusal}"
+                );
+                return;
+            }
+        }
+
+        match?.UpdateMapStatus(status);
     }
 }
