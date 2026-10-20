@@ -1,4 +1,5 @@
 using FiveStack.Entities;
+using FiveStack.Enums;
 using FiveStack.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -301,11 +302,11 @@ public class GameBackUpRounds
             return;
         }
 
-        BackupRound? backupRound = RoundRestoreGateUtility.LatestBackup(matchMap.rounds, round);
-
-        if (backupRound == null)
+        string? refusal = RestoreRefusal(round);
+        if (refusal != null)
         {
-            _logger.LogWarning($"missing backup round: {round}");
+            _logger.LogWarning($"Restore round {round} refused: {refusal}");
+            _gameServer.Message(MessageType.Alert, $" Restore round blocked: {refusal}.");
             return;
         }
 
@@ -587,6 +588,7 @@ public class GameBackUpRounds
             // DEAFCS has no Rush mode, the only match type upstream refuses here.
             false,
             IsResettingRound(),
+            _matchService.GetCurrentMatch()?.GetCurrentMapStatus() ?? eMapStatus.Unknown,
             round,
             matchMap != null
                 && RoundRestoreGateUtility.LatestBackup(matchMap.rounds, round) != null,
