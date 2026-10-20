@@ -1,3 +1,4 @@
+using FiveStack.Utilities;
 using Microsoft.Extensions.Logging;
 using SwiftlyS2.Shared.Commands;
 
@@ -24,6 +25,14 @@ public partial class FiveStackPlugin
         if (!int.TryParse(_round, out int round))
         {
             _logger.LogWarning($"Failed to parse round number: {_round}");
+            return;
+        }
+
+        string? refusal = _gameBackupRounds.RestoreRefusal();
+        if (refusal != null)
+        {
+            _logger.LogWarning($"Restore round {round} refused: {refusal}");
+            context.Reply($"{RoundRestoreGateUtility.RefusedPrefix} {refusal}");
             return;
         }
 
