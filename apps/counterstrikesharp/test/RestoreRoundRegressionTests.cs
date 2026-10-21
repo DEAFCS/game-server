@@ -1,3 +1,4 @@
+using FiveStack;
 using FiveStack.Entities;
 using FiveStack.Enums;
 using FiveStack.Utilities;
@@ -172,5 +173,29 @@ public class RestoreRoundRegressionTests
     public void RestartMapStillSendsAMapBeingPlayedBackToWarmup(eMapStatus status)
     {
         Assert.Null(RoundRestoreGateUtility.WarmupRefusal(true, status));
+    }
+
+    // Restart Map after the knife round (or mid-map) used to leave matchmaking
+    // stuck in warmup: the all-connected countdown is one-shot per match and
+    // .ready is off there, so nothing ended the new warmup.
+    [Theory]
+    [InlineData(eMapStatus.Knife)]
+    [InlineData(eMapStatus.Live)]
+    [InlineData(eMapStatus.Overtime)]
+    [InlineData(eMapStatus.Paused)]
+    public void RestartMapRearmsTheWarmupCountdown(eMapStatus from)
+    {
+        Assert.True(WarmupShortenSystem.RearmsOnReturnToWarmup(from));
+    }
+
+    // Warmup itself, first setup and finished maps keep the one-shot guard.
+    [Theory]
+    [InlineData(eMapStatus.Unknown)]
+    [InlineData(eMapStatus.Scheduled)]
+    [InlineData(eMapStatus.Warmup)]
+    [InlineData(eMapStatus.Finished)]
+    public void OtherTransitionsKeepTheOneShotCountdown(eMapStatus from)
+    {
+        Assert.False(WarmupShortenSystem.RearmsOnReturnToWarmup(from));
     }
 }

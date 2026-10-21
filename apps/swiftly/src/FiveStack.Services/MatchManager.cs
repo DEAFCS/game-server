@@ -437,6 +437,10 @@ public class MatchManager
                 UpdateMapStatus(eMapStatus.Warmup);
                 return;
             case eMapStatus.Warmup:
+                if (WarmupShortenSystem.RearmsOnReturnToWarmup(_currentMapStatus))
+                {
+                    warmupShortenSystem.Reset();
+                }
                 SetupTeams();
                 status = eMapStatus.Warmup;
                 StartWarmup();
