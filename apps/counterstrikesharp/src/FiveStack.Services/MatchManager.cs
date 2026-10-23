@@ -38,6 +38,12 @@ public class MatchManager
     // once the timeout naturally clears and freezes an already-full match
     // with nothing left to ever resume it.
     private Timer? _pendingPauseRetryTimer;
+
+    // DEAFCS: set while an organizer's pause (console/RCON: the website's
+    // Pause, used around a Restore Round) is in effect. Automatic resumes (a
+    // player reconnecting, an empty team filling) leave it alone; any
+    // explicit resume clears it.
+    private bool _organizerPauseHeld;
     public bool gameEnded = false;
 
     private readonly MatchEvents _matchEvents;
@@ -341,8 +347,30 @@ public class MatchManager
         _pendingPauseRetryTimer = null;
     }
 
-    public void ResumeMatch(string? message = null, bool skipUpdate = false)
+    public void HoldOrganizerPause()
     {
+        _organizerPauseHeld = true;
+    }
+
+    // An automatic resume never lifts an organizer's pause; an explicit one
+    // (organizer Resume, .resume, a resume vote) always may.
+    public static bool ResumeAllowed(bool organizerPauseHeld, bool automatic)
+    {
+        return !(organizerPauseHeld && automatic);
+    }
+
+    public void ResumeMatch(
+        string? message = null,
+        bool skipUpdate = false,
+        bool automatic = false
+    )
+    {
+        if (!ResumeAllowed(_organizerPauseHeld, automatic))
+        {
+            _logger.LogInformation("Organizer pause held, not resuming automatically");
+            return;
+        }
+
         if (_timeoutSystem.IsTimeoutActive())
         {
             _logger.LogInformation("Timeout is active, cannot resume match");
@@ -354,6 +382,8 @@ public class MatchManager
             _logger.LogInformation("Resetting round, cannot resume match");
             return;
         }
+
+        _organizerPauseHeld = false;
 
         _logger.LogInformation($"Resuming Match{(message != null ? $": {message}" : "")}");
         _gameServer.SendCommands(["mp_unpause_match"]);
@@ -1548,6 +1578,7 @@ public class MatchManager
 
         _currentMapStatus = eMapStatus.Unknown;
         _configuredMapId = null;
+        _organizerPauseHeld = false;
 
         gameEnded = false;
 

@@ -32,6 +32,14 @@ public partial class FiveStackPlugin
             return HookResult.Continue;
         }
 
+        // DEAFCS: loading a round backup resets every player, and the engine
+        // reports each reset as a death. Those aren't gameplay: skip them while
+        // the restore is in progress, as RoundStart and RoundEnd do.
+        if (_gameBackupRounds.IsResettingRound())
+        {
+            return HookResult.Continue;
+        }
+
         IPlayer attacked = @event.UserIdPlayer;
 
         if (match.IsWarmup() && attacked.Controller.InGameMoneyServices != null)
