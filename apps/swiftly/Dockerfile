@@ -4,7 +4,7 @@
 # than trusting the tag to stay put. Bump deliberately if Valve publishes an
 # update worth taking; check via: docker buildx imagetools inspect
 # registry.gitlab.steamos.cloud/steamrt/sniper/platform:latest-container-runtime-depot
-FROM registry.gitlab.steamos.cloud/steamrt/sniper/platform@sha256:8cd1bdfc418afd8b019a69d6f5a9305865a5f3bb5554102006fdb8f6853d5f67 AS build
+FROM registry.gitlab.steamos.cloud/steamrt/sniper/platform@sha256:8cd1bdfc418afd8b019a69d6f5a9305865a5f3bb5554102006fdb8f6853d5f67 AS dotnet-sdk
 
 # Same bullseye-EOL mirror problem as the runtime stage below: deb.debian.org
 # 404s for this suite now, and archive.debian.org never carried a separate
@@ -26,6 +26,8 @@ RUN sed -i \
 ENV PATH="/usr/share/dotnet:${PATH}"
 ENV DOTNET_ROOT="/usr/share/dotnet"
 
+FROM dotnet-sdk AS build
+
 WORKDIR /mod
 
 COPY Directory.Build.props ./
@@ -42,6 +44,28 @@ ENV RELEASE_VERSION=${RELEASE_VERSION}
 RUN sed -i "s/__RELEASE_VERSION__/${RELEASE_VERSION}/" apps/swiftly/src/FiveStack.cs
 
 RUN dotnet publish -c Release apps/swiftly/src/FiveStack.csproj -o /mod/release
+
+# The practice plugin is the other half of this image: a server runs either it
+# or the match plugin, never both, so it is built here and symlinked into place
+# only when INSTALL_UTILITY_PRACTICE_PLUGIN is set.
+FROM dotnet-sdk AS utility-build
+
+WORKDIR /mod
+
+COPY Directory.Build.props ./
+COPY apps/utility-sw/src/UtilityPractice.csproj apps/utility-sw/src/
+
+RUN dotnet restore apps/utility-sw/src/UtilityPractice.csproj
+
+COPY shared shared
+COPY apps/utility-sw apps/utility-sw
+
+ARG RELEASE_VERSION
+ENV RELEASE_VERSION=${RELEASE_VERSION}
+
+RUN sed -i "s/__RELEASE_VERSION__/${RELEASE_VERSION}/" apps/utility-sw/src/UtilityPracticePlugin.cs
+
+RUN dotnet publish -c Release apps/utility-sw/src/UtilityPractice.csproj -o /mod/release
 
 FROM debian:bookworm-slim AS zip-creator
 
@@ -73,6 +97,13 @@ ENV AUTOLOAD_PLUGINS=true
 ENV PLUGINS_DIR="/opt/custom-plugins"
 
 ENV INSTALL_5STACK_PLUGIN=true
+ENV INSTALL_UTILITY_PRACTICE_PLUGIN=false
+# DEAFCS: node plugins a practice server never loads. None by default: Pracc
+# players keep their DEAFCS skins (InventorySimulator), as in matches.
+ENV UTILITY_PRACTICE_SKIP_PLUGINS=""
+# ...and the ones a lineup-render server also skips: it records bots, never a
+# player's inventory.
+ENV UTILITY_RENDER_SKIP_PLUGINS="InventorySimulator"
 
 ENV GAME_ID="730"
 ENV GAME_PARAMS=""
@@ -97,6 +128,20 @@ ENV SWIFTLYS2_URL=https://github.com/swiftly-solution/swiftlys2/releases/downloa
 ENV METAMOD_CSGO_URL=https://mms.alliedmods.net/mmsdrop/1.12/mmsource-1.12.0-git1219-linux.tar.gz
 ENV SOURCEMOD_CSGO_URL=https://sm.alliedmods.net/smdrop/1.13/sourcemod-1.13.0-git7297-linux.tar.gz
 ENV NO_LOBBY_RESERVATION_URL=https://github.com/nuxencs/NoLobbyReservation/releases/download/v0.0.1/NoLobbyReservation.zip
+
+# The engine natively mounts exactly one addon -- the map -- so the HUD workshop
+# item needs AddonsManager to reach clients at all, as do the addons registry
+# plugins list in workshop_addons; see setup.sh. Blank disables the HUD's mount:
+# the practice plugin degrades to centre text without it.
+ENV HUD_WORKSHOP_ID="3791548068"
+
+# ARG, not ENV: the download below happens once at build time, so these are set
+# with --build-arg. As ENV they read as runtime knobs beside HUD_WORKSHOP_ID and
+# would silently do nothing when overridden at docker run.
+ARG ADDONS_MANAGER_VERSION="v2.1.0-2"
+# a rebuild tag keeps the zip name of the version it rebuilds
+ARG ADDONS_MANAGER_ASSET="AddonsManager-v2.1.0.zip"
+ARG ADDONS_MANAGER_URL=https://github.com/SwiftlyS2-Plugins/AddonsManager/releases/download/${ADDONS_MANAGER_VERSION}/${ADDONS_MANAGER_ASSET}
 
 # The base image's stock sources.list still points at deb.debian.org,
 # which 404s now that bullseye is EOL and moved to the archive -- and
@@ -151,6 +196,10 @@ RUN wget -q $SWIFTLYS2_URL -O /tmp/swiftlys2.zip && \
 	unzip -q /tmp/swiftlys2.zip -d /opt/swiftlys2 && \
 	rm /tmp/swiftlys2.zip
 
+RUN wget -q $ADDONS_MANAGER_URL -O /tmp/addons-manager.zip && \
+	unzip -q /tmp/addons-manager.zip -d /opt/addons-manager && \
+	rm /tmp/addons-manager.zip
+
 RUN mkdir -p /opt/csgo-metamod /opt/csgo-sourcemod /opt/csgo-no-lobby-reservation && \
 	wget -q $METAMOD_CSGO_URL -O /tmp/metamod-csgo.tar.gz && \
 	tar -xz -C /opt/csgo-metamod -f /tmp/metamod-csgo.tar.gz && \
@@ -167,6 +216,7 @@ COPY apps/swiftly/cfg /opt/server-cfg
 COPY shared/scripts /opt/scripts
 COPY apps/swiftly/scripts /opt/scripts
 COPY --from=build /mod/release /opt/mod
+COPY --from=utility-build /mod/release /opt/utility-practice
 
 RUN cp -R /opt/swiftlys2/swiftlys2-linux-${SWIFTLYS2_VERSION}-with-runtimes/addons /opt/addons && \
     rm -rf /opt/swiftlys2
