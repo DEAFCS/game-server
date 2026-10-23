@@ -172,7 +172,7 @@ public partial class FiveStackPlugin
             // actually paused.
             if (MatchUtility.PlayerCount() == match.GetExpectedPlayerCount())
             {
-                match.ResumeMatch();
+                match.ResumeMatch(automatic: true);
             }
         });
 

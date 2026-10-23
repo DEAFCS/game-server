@@ -99,6 +99,13 @@ public class TimeoutSystem
         // once the technical pause ends.
         if (match.teamEmptyForfeitSystem.IsActivelyPausing)
         {
+            // DEAFCS: the match is already paused; an organizer's pause still
+            // has to outlast the empty team filling up again.
+            if (player == null)
+            {
+                match.HoldOrganizerPause();
+            }
+
             SendTimeoutAlreadyActiveMessage(player);
             return;
         }
@@ -149,6 +156,11 @@ public class TimeoutSystem
             }
 
             pauseMessage = _localizer["timeout.player_paused", player.PlayerName, ChatColors.Red];
+        }
+        else
+        {
+            // DEAFCS: console/RCON is an organizer (the website's Pause).
+            match.HoldOrganizerPause();
         }
 
         PauseTechMatch(pauseMessage);

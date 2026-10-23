@@ -158,7 +158,7 @@ public class DisconnectBudgetSystem
 
         if (match?.IsPaused() == true && currentPlayers == expectedPlayers)
         {
-            match.ResumeMatch();
+            match.ResumeMatch(automatic: true);
         }
     }
 

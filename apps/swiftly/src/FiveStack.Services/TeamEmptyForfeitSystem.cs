@@ -166,7 +166,7 @@ public class TeamEmptyForfeitSystem
             // once the timeout clears and freezes an already-full match
             // with nothing left to ever resume it.
             resumeMatch.CancelPendingPauseRetry();
-            resumeMatch.ResumeMatch();
+            resumeMatch.ResumeMatch(automatic: true);
         }
     }
 

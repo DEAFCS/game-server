@@ -24,6 +24,8 @@ public partial class FiveStackPlugin
             || match == null
             || matchData?.current_match_map_id == null
             || !match.IsInPlay()
+            // DEAFCS: the player resets of a backup load aren't gameplay damage.
+            || _gameBackupRounds.IsResettingRound()
         )
         {
             return HookResult.Continue;
