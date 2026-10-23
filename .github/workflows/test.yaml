@@ -22,12 +22,18 @@ jobs:
       - name: Test server launch
         run: bash shared/scripts/test/server-launch.test.sh
 
+      - name: Test practice HUD workshop addons
+        run: bash shared/scripts/test/workshop-addons.test.sh
+
+      - name: Test practice server node plugins
+        run: bash shared/scripts/test/practice-plugins.test.sh
+
   test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        plugin: [counterstrikesharp, swiftly]
+        plugin: [counterstrikesharp, swiftly, utility-sw]
     steps:
       - uses: actions/checkout@v4
 

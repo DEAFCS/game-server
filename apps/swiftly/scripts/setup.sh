@@ -60,6 +60,19 @@ if [ "$SERVER_TYPE" = "Ranked" ]; then
   cp "/opt/server-cfg/valve-rulebook.cfg" "$INSTANCE_SERVER_DIR/game/csgo/cfg"
 fi
 
+# A practice server runs no match plugin to hold it awake, so the base
+# server.cfg it would otherwise be linked to is copied in with hibernation off.
+if [ "$SERVER_TYPE" = "Practice" ]; then
+  if [ -f "$BASE_SERVER_DIR/game/csgo/cfg/server.cfg" ]; then
+    cp "$BASE_SERVER_DIR/game/csgo/cfg/server.cfg" "$INSTANCE_SERVER_DIR/game/csgo/cfg/server.cfg"
+  fi
+  printf '\nsv_hibernate_when_empty 0\n' >> "$INSTANCE_SERVER_DIR/game/csgo/cfg/server.cfg"
+  # DEAFCS: relay only, like ranked/public server.cfg (bda724a). A practice
+  # server copies the base server.cfg instead, so it needs the same line to
+  # share no ICE candidates and never hand out the node's real IP.
+  printf 'net_option P2P_Transport_ICE_Enable 0\n' >> "$INSTANCE_SERVER_DIR/game/csgo/cfg/server.cfg"
+fi
+
 if [ ! -d "/opt/custom-plugins/addons/swiftlys2/configs" ]; then
   mkdir -p "/opt/custom-plugins/addons/swiftlys2/configs"
 fi
@@ -73,7 +86,10 @@ fi
 
 ln -s "/opt/custom-plugins/addons/swiftlys2/configs" "${INSTANCE_SERVER_DIR}/game/csgo/addons/swiftlys2/configs"
 
-if [ "$SERVER_TYPE" != "Ranked" ]; then
+# Public-server treatment: every installed custom plugin gets symlinked in,
+# which is what "load on every match" is meant to gate. A practice server is
+# 5stack-managed like a ranked one -- it runs its own plugin and nothing else.
+if [ "$SERVER_TYPE" != "Ranked" ] && [ "$SERVER_TYPE" != "Practice" ]; then
   if [ ! -d "/opt/custom-plugins" ]; then
     mkdir -p "/opt/custom-plugins"
   fi
@@ -149,6 +165,88 @@ if $INSTALL_5STACK_PLUGIN = true ; then
     # dir pre-exists (dev volume mount without DEV_SWAPPED); don't plant /opt/mod inside it
     echo "---5Stack: plugin dir already present, skipping /opt/mod symlink---"
   fi
+fi
+
+# A practice server runs this instead of the match plugin, never alongside it.
+if [ "${INSTALL_UTILITY_PRACTICE_PLUGIN:-false}" = "true" ]; then
+  echo "---Install Utility Practice---"
+  UTILITY_PRACTICE_PLUGIN_DIR="${INSTANCE_SERVER_DIR}/game/csgo/addons/swiftlys2/plugins/UtilityPractice"
+  if [ "${DEV_SWAPPED}" == "1" ]; then
+    # AutoHotReload's recursive FileSystemWatcher does not follow symlinked plugin
+    # dirs, so hot reload needs the dev volume mounted straight onto this path
+    # (see the dev deployment). Without the mount, fall back to a symlink.
+    mkdir -p "$UTILITY_PRACTICE_PLUGIN_DIR"
+    if mountpoint -q "$UTILITY_PRACTICE_PLUGIN_DIR"; then
+      echo "---Utility Practice dev: plugin dir is a mounted volume (hot reload enabled)---"
+    else
+      # css and sw dev builds share the dev volume; each uses its own subfolder
+      rmdir "$UTILITY_PRACTICE_PLUGIN_DIR" 2>/dev/null
+      mkdir -p "/opt/dev/utility-sw"
+      ln -s "/opt/dev/utility-sw" "$UTILITY_PRACTICE_PLUGIN_DIR"
+      echo "---Utility Practice dev: symlinked /opt/dev/utility-sw (hot reload OFF; use 'sw plugins reload UtilityPractice')---"
+    fi
+  elif [ ! -e "$UTILITY_PRACTICE_PLUGIN_DIR" ]; then
+    ln -s "/opt/utility-practice" "$UTILITY_PRACTICE_PLUGIN_DIR"
+  else
+    echo "---Utility Practice: plugin dir already present, skipping /opt/utility-practice symlink---"
+  fi
+
+  # A render pod is the only client and has no HUD to show; the addon's
+  # download prompt would stall its cs2 on connect.
+  if [ "${UTILITY_RENDER_MODE:-}" = "true" ]; then
+    HUD_WORKSHOP_ID=""
+    WORKSHOP_ADDONS=""
+  fi
+
+  # The HUD's Panorama layouts live in a workshop addon, served with the
+  # plugins' below. Without it the plugin still works, falling back to centre
+  # text, so a bad id here must not stop the server.
+  case "${HUD_WORKSHOP_ID}" in
+    "")
+      echo "---Utility Practice: HUD_WORKSHOP_ID unset, HUD falls back to centre text---"
+      ;;
+    *[!0-9]*)
+      echo "---Utility Practice: HUD_WORKSHOP_ID '${HUD_WORKSHOP_ID}' is not a workshop id, HUD falls back to centre text---"
+      ;;
+    *)
+      PRACTICE_HUD_ADDON="${HUD_WORKSHOP_ID}"
+      echo "---Utility Practice: HUD addon ${HUD_WORKSHOP_ID}---"
+      ;;
+  esac
+fi
+
+# DEAFCS: a practice server keeps the node's DEAFCS plugins (accessibility:
+# DeafCS.DisableValvePremute, Mutesound; skins: InventorySimulator, so Pracc
+# players have their DEAFCS skins as in matches) but never loads the ones named
+# in UTILITY_PRACTICE_SKIP_PLUGINS (none by default). A lineup-render server
+# also skips UTILITY_RENDER_SKIP_PLUGINS (skins): it records bots, and its
+# clips should not depend on anyone's inventory. Upstream gets the same result
+# from its plugin index, which DEAFCS nodes do not have. Only the instance's
+# own link is removed, never anything on the node volume: a link whose parent
+# is itself a link is left alone.
+if [ "${INSTALL_UTILITY_PRACTICE_PLUGIN:-false}" = "true" ]; then
+  skipped_plugins="${UTILITY_PRACTICE_SKIP_PLUGINS:-}"
+  if [ "${UTILITY_RENDER_MODE:-}" = "true" ]; then
+    skipped_plugins="${skipped_plugins} ${UTILITY_RENDER_SKIP_PLUGINS:-}"
+  fi
+  for skipped_plugin in ${skipped_plugins}; do
+    skipped_link="${INSTANCE_SERVER_DIR}/game/csgo/addons/swiftlys2/plugins/${skipped_plugin}"
+    if [ -L "$skipped_link" ] && [ ! -L "$(dirname "$skipped_link")" ]; then
+      rm -f "$skipped_link"
+      echo "---Utility Practice: not loading ${skipped_plugin} on a practice server---"
+    fi
+  done
+fi
+
+# The practice HUD's addon, and every addon the plugins this server loads list
+# in the catalog -- the panel sends those as WORKSHOP_ADDONS. AddonsManager only
+# runs when there is something to serve, so a server whose plugins ship no
+# addons never makes a player download anything.
+WORKSHOP_ADDON_IDS="$(workshop_addon_ids "${PRACTICE_HUD_ADDON:-}" "${WORKSHOP_ADDONS:-}")"
+if [ -n "$WORKSHOP_ADDON_IDS" ]; then
+  # Bare numeric ids, one per line, so splitting them is safe.
+  # shellcheck disable=SC2086
+  enable_addons_manager "${INSTANCE_SERVER_DIR}/game/csgo" $WORKSHOP_ADDON_IDS
 fi
 
 if [ ! -e "$INSTANCE_SERVER_DIR/game/csgo/addons/swiftlys2/configs/core.jsonc" ]; then
