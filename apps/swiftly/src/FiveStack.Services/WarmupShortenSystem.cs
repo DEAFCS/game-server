@@ -165,6 +165,19 @@ public class WarmupShortenSystem
         }
     }
 
+    // Restart Map (match_state Warmup, 5stackgg/game-server #254) sends a map
+    // that was already past warmup back to it. That is a new warmup: with
+    // .ready off in matchmaking, this countdown is the only way out of it, so
+    // it has to run again even though everyone already connected once (the
+    // one-shot guard is for reconnects within one warmup, 74be10a).
+    public static bool RearmsOnReturnToWarmup(eMapStatus from)
+    {
+        return from == eMapStatus.Knife
+            || from == eMapStatus.Live
+            || from == eMapStatus.Overtime
+            || from == eMapStatus.Paused;
+    }
+
     public void Reset()
     {
         _everyoneConnectedOnce = false;

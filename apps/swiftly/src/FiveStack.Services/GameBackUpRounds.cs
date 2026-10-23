@@ -1,4 +1,5 @@
 using FiveStack.Entities;
+using FiveStack.Enums;
 using FiveStack.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -149,7 +150,11 @@ public class GameBackUpRounds
         string csgoDir = BackupDirectory;
         string prefix = MatchUtility.GetSafeMatchPrefix(match);
 
-        int highestNumber = GetHighestBackupRoundOnDisk(csgoDir, prefix);
+        int highestNumber = GetHighestBackupRoundOnDisk(
+            csgoDir,
+            prefix,
+            round => RoundRestoreGateUtility.IsUndone(matchMap.rounds, round)
+        );
         int totalRoundsPlayed = _gameServer.GetTotalRoundsPlayed();
 
         _logger.LogInformation(
@@ -171,7 +176,7 @@ public class GameBackUpRounds
 
         try
         {
-            if (!matchMap.rounds.Any(backupRound => backupRound.round == highestNumber))
+            if (RoundRestoreGateUtility.LatestBackup(matchMap.rounds, highestNumber) == null)
             {
                 string content = File.ReadAllText(backupFilePath);
                 matchMap.rounds = matchMap
@@ -195,7 +200,7 @@ public class GameBackUpRounds
 
     // Scans the game dir for CS2 round backup files ({prefix}_round<NN>.txt) and
     // returns the highest round number present (0 if none).
-    private int GetHighestBackupRoundOnDisk(string csgoDir, string prefix)
+    private int GetHighestBackupRoundOnDisk(string csgoDir, string prefix, Func<int, bool> skip)
     {
         int highest = 0;
 
@@ -216,7 +221,7 @@ public class GameBackUpRounds
                 }
 
                 string numberPart = name.Substring(idx + "_round".Length);
-                if (int.TryParse(numberPart, out int round) && round > highest)
+                if (int.TryParse(numberPart, out int round) && round > highest && !skip(round))
                 {
                     highest = round;
                 }
@@ -297,16 +302,11 @@ public class GameBackUpRounds
             return;
         }
 
-        BackupRound? backupRound = matchMap.rounds.FirstOrDefault(
-            (backupRound) =>
-            {
-                return backupRound.round == round;
-            }
-        );
-
-        if (backupRound == null)
+        string? refusal = RestoreRefusal(round);
+        if (refusal != null)
         {
-            _logger.LogWarning($"missing backup round: {round}");
+            _logger.LogWarning($"Restore round {round} refused: {refusal}");
+            _gameServer.Message(MessageType.Alert, $" Restore round blocked: {refusal}.");
             return;
         }
 
@@ -330,8 +330,23 @@ public class GameBackUpRounds
                 () =>
                 {
                     _logger.LogInformation("restore round vote passed");
-                    SendRestoreRoundToBackend(round);
                     _resetRound = null;
+
+                    string? refusal = RestoreRefusal(round);
+                    if (refusal != null)
+                    {
+                        _logger.LogWarning(
+                            $"Restore round {round} refused after the vote: {refusal}"
+                        );
+                        _gameServer.Message(
+                            MessageType.Alert,
+                            $" Restore round blocked: {refusal}."
+                        );
+                        restoreRoundVote = null;
+                        return;
+                    }
+
+                    SendRestoreRoundToBackend(round);
                 },
                 () =>
                 {
@@ -489,12 +504,7 @@ public class GameBackUpRounds
             return;
         }
 
-        BackupRound? backupRound = matchMap.rounds.FirstOrDefault(
-            (backupRound) =>
-            {
-                return backupRound.round == round;
-            }
-        );
+        BackupRound? backupRound = RoundRestoreGateUtility.LatestBackup(matchMap.rounds, round);
 
         if (backupRound == null)
         {
@@ -564,6 +574,28 @@ public class GameBackUpRounds
                 );
             });
         });
+    }
+
+    // restore_round hands the round to the api, which marks the later rounds'
+    // stats deleted before it sends api_restore_round back, so a restore that
+    // would be refused there has to be refused before it leaves.
+    public string? RestoreRefusal(int round)
+    {
+        MatchData? match = _matchService.GetCurrentMatch()?.GetMatchData();
+        MatchMap? matchMap = _matchService.GetCurrentMatch()?.GetCurrentMap();
+
+        return RoundRestoreGateUtility.Refusal(
+            // DEAFCS has no Rush mode, the only match type upstream refuses here.
+            false,
+            IsResettingRound(),
+            _matchService.GetCurrentMatch()?.GetCurrentMapStatus() ?? eMapStatus.Unknown,
+            round,
+            matchMap != null
+                && RoundRestoreGateUtility.LatestBackup(matchMap.rounds, round) != null,
+            MatchUtility.PlayerCount(),
+            _matchService.GetCurrentMatch()?.GetExpectedPlayerCount() ?? 10,
+            match?.options.type ?? ""
+        );
     }
 
     private bool CanRestoreRound(int round)

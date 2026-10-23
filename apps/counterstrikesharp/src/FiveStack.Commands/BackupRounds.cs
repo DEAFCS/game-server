@@ -1,6 +1,7 @@
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Commands;
+using FiveStack.Utilities;
 using Microsoft.Extensions.Logging;
 
 namespace FiveStack;
@@ -22,6 +23,14 @@ public partial class FiveStackPlugin
         if (!int.TryParse(_round, out int round))
         {
             _logger.LogWarning($"Failed to parse round number: {_round}");
+            return;
+        }
+
+        string? refusal = _gameBackupRounds.RestoreRefusal(round);
+        if (refusal != null)
+        {
+            _logger.LogWarning($"Restore round {round} refused: {refusal}");
+            command.ReplyToCommand($"{RoundRestoreGateUtility.RefusedPrefix} {refusal}");
             return;
         }
 
